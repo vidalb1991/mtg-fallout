@@ -1,0 +1,3921 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wasteland Commander — Fallout Playtest V.0.1</title>
+<style>
+/* ============================================================
+   TEMA PIP-BOY — base verde fósforo + âmbar
+   Acento por deck definido via --accent (alterado em JS)
+   ============================================================ */
+:root{
+  --bg-deep:#040a05;
+  --bg:#07140a;
+  --bg-panel:#0a1d10;
+  --bg-panel-2:#0e2716;
+  --border:#1f5d2c;
+  --border-strong:#2f8a42;
+  --green:#3eff7e;
+  --green-dim:#1fa84e;
+  --green-glow:rgba(62,255,126,.45);
+  --amber:#ffb000;
+  --amber-dim:#aa7400;
+  --red:#ff4040;
+  --text:#9bffb6;
+  --text-dim:#5fb878;
+  --text-bright:#dfffe7;
+  --accent:#3eff7e; /* alterado por JS pela cor do deck */
+  --accent-glow:rgba(62,255,126,.45);
+  --scanline:rgba(0,0,0,.18);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--bg-deep);
+  color:var(--text);
+  font-family:'VT323','Courier New',monospace;
+  font-size:18px;
+  line-height:1.35;
+  user-select:none;
+  position:relative;
+}
+/* Scanlines/CRT — aplicado como BACKGROUND nos containers, não como overlay global.
+   Isso garante que cartas (imagens, texto, arte) fiquem limpas. */
+body{
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 2px,
+      var(--scanline) 2px 3px
+    ),
+    var(--bg-deep);
+}
+/* Vignette vai num overlay separado, atrás das cartas */
+body::after{
+  content:"";
+  position:fixed;inset:0;
+  background:radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,.55) 100%);
+  pointer-events:none;
+  z-index:1;
+}
+/* Zonas/painéis também têm scanline própria de fundo (intensidade menor) */
+.zone-row, .panel-box, #topbar, #hand-area, #bottom-actions, .setup-box, .loader-box{
+  background-image:
+    repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,.10) 2px 3px);
+  background-blend-mode: multiply;
+}
+/* Containers acima da vignette */
+#game-screen, #setup-screen, #loading-screen{position:relative;z-index:2}
+
+.lang-btn{font-size:14px;padding:6px 12px}
+.lang-btn.active{background:var(--accent);color:var(--bg-deep);box-shadow:0 0 14px var(--accent-glow);text-shadow:none}
+
+h1,h2,h3,h4{font-family:'Press Start 2P','VT323',monospace;font-weight:normal;letter-spacing:1px;color:var(--accent);text-shadow:0 0 8px var(--accent-glow)}
+h1{font-size:22px;margin-bottom:14px}
+h2{font-size:16px;margin-bottom:10px}
+h3{font-size:13px;margin-bottom:8px}
+
+button{
+  font-family:inherit;font-size:17px;
+  background:var(--bg-panel);color:var(--accent);
+  border:2px solid var(--border-strong);
+  padding:8px 16px;cursor:pointer;
+  text-transform:uppercase;letter-spacing:1px;
+  transition:all .15s;
+  text-shadow:0 0 4px var(--accent-glow);
+  box-shadow:inset 0 0 12px rgba(0,0,0,.5);
+}
+button:hover:not(:disabled){background:var(--accent);color:var(--bg-deep);box-shadow:0 0 18px var(--accent-glow);text-shadow:none}
+button:disabled{opacity:.35;cursor:not-allowed}
+button.amber{color:var(--amber);border-color:var(--amber-dim);text-shadow:0 0 4px rgba(255,176,0,.4)}
+button.amber:hover:not(:disabled){background:var(--amber);color:var(--bg-deep);box-shadow:0 0 18px rgba(255,176,0,.5)}
+button.red{color:var(--red);border-color:#7a1f1f}
+button.red:hover:not(:disabled){background:var(--red);color:#fff}
+
+/* ============================================================
+   FONTES — usando Google Fonts via @import
+   ============================================================ */
+/* === DISPLAY DESTACADO DO COMMANDER (sidebar) === */
+#commander-display{
+  border:2px solid var(--accent)!important;
+  box-shadow:0 0 14px var(--accent-glow), inset 0 0 18px rgba(0,0,0,.5);
+  background:linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));
+  position:relative;
+}
+#commander-display h3{
+  color:var(--accent);
+  text-shadow:0 0 6px var(--accent-glow);
+}
+.cmdr-status{
+  font-size:11px;color:var(--amber);letter-spacing:1px;
+  text-align:center;margin-bottom:6px;
+  padding:2px 4px;border:1px solid var(--amber-dim);background:rgba(255,176,0,.08);
+}
+.cmdr-status.in-play{color:var(--green);border-color:var(--border-strong);background:rgba(62,255,126,.08)}
+.cmdr-card-wrap{
+  position:relative;
+  border:2px solid var(--border-strong);
+  background:#000;
+  border-radius:4px;
+  margin-bottom:6px;
+  cursor:pointer;
+  transition:all .2s;
+  aspect-ratio: 488/680; /* proporção carta MTG */
+  overflow:hidden;
+  max-height:280px;
+  margin-left:auto;margin-right:auto;
+}
+.cmdr-card-wrap:hover{
+  border-color:var(--accent);
+  box-shadow:0 0 14px var(--accent-glow);
+  transform:scale(1.02);
+}
+.cmdr-card-wrap.in-play{opacity:.45;filter:grayscale(.6)}
+.cmdr-card-wrap.in-play::after{
+  content:"";position:absolute;inset:0;
+  background:repeating-linear-gradient(45deg, rgba(0,0,0,.3) 0 8px, transparent 8px 16px);
+}
+.cmdr-card-wrap.in-grave::before{
+  content:"⚰";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  font-size:60px;color:rgba(255,255,255,.4);z-index:5;
+}
+.cmdr-card-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+.cmdr-card-wrap .cmdr-fallback{
+  width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  color:var(--accent);font-family:'Press Start 2P',monospace;font-size:11px;
+  text-align:center;padding:10px;
+}
+.cmdr-cost-row{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:6px;
+  font-size:13px;
+}
+.cmdr-cost-row .cost-label{color:var(--text-dim);font-size:11px;letter-spacing:1px}
+.cmdr-tax-info{
+  font-size:11px;color:var(--amber);text-align:center;margin-bottom:4px;
+  letter-spacing:1px;
+}
+.cmdr-tax-info.high{color:var(--red)}
+#btn-cast-cmdr-big{
+  width:100%;padding:8px;font-size:14px;
+  font-family:'Press Start 2P',monospace;letter-spacing:1px;
+}
+#btn-cast-cmdr-big.can-cast{
+  background:var(--accent);color:var(--bg-deep);
+  box-shadow:0 0 14px var(--accent-glow);text-shadow:none;
+  animation:pulse-cast 1.8s infinite;
+}
+#btn-cast-cmdr-big:disabled{
+  opacity:.45;cursor:not-allowed;animation:none;
+}
+@keyframes pulse-cast{
+  0%,100%{box-shadow:0 0 14px var(--accent-glow)}
+  50%{box-shadow:0 0 24px var(--accent-glow), 0 0 40px var(--accent-glow)}
+}
+
+/* responsive: no mobile, encolhe a imagem */
+@media (max-width:900px){
+  .cmdr-card-wrap{max-width:120px;margin:0 auto 6px}
+}
+.card-counters{
+  position:absolute;top:2px;left:2px;
+  display:flex;flex-direction:column;gap:2px;
+  z-index:10;pointer-events:none;
+}
+.counter-badge{
+  background:rgba(0,0,0,.85);
+  border:1.5px solid var(--accent);
+  border-radius:10px;
+  padding:1px 5px;
+  font-size:10px;
+  font-family:'Press Start 2P',monospace;
+  color:var(--accent);
+  display:inline-flex;align-items:center;gap:3px;
+  box-shadow:0 0 6px var(--accent-glow);
+  min-width:24px;justify-content:center;
+}
+.counter-badge.plus{border-color:#3eff7e;color:#3eff7e;box-shadow:0 0 6px rgba(62,255,126,.5)}
+.counter-badge.minus{border-color:#ff4040;color:#ff4040;box-shadow:0 0 6px rgba(255,64,64,.5)}
+.counter-badge.charge{border-color:#ffb000;color:#ffb000;box-shadow:0 0 6px rgba(255,176,0,.5)}
+.counter-badge.loyalty{border-color:#a070ff;color:#a070ff;box-shadow:0 0 6px rgba(160,112,255,.5);background:rgba(20,10,40,.9)}
+.counter-badge.quest{border-color:#ffe040;color:#ffe040}
+.counter-badge.rad{border-color:#7dff5e;color:#7dff5e;background:rgba(10,40,10,.9)}
+.counter-badge .icon{font-size:9px}
+
+/* PT modificado destacado */
+.card-text .ct-pt.modified{color:#3eff7e;text-shadow:0 0 4px rgba(62,255,126,.6);background:rgba(0,40,10,.8)}
+.pt-overlay{
+  position:absolute;bottom:2px;right:2px;
+  background:rgba(0,0,0,.85);
+  border:1.5px solid #3eff7e;
+  border-radius:4px;
+  padding:1px 4px;font-size:11px;
+  color:#3eff7e;font-weight:bold;
+  font-family:'Press Start 2P',monospace;
+  box-shadow:0 0 6px rgba(62,255,126,.4);
+  z-index:9;pointer-events:none;
+}
+.pt-overlay.damaged{border-color:#ff4040;color:#ff8080}
+
+/* === CONTADORES DO JOGADOR (topbar) === */
+.player-counter{
+  display:inline-flex;align-items:center;gap:3px;
+  border:1.5px solid var(--border-strong);
+  background:rgba(0,0,0,.4);
+  padding:2px 7px;border-radius:12px;
+  font-family:'Press Start 2P',monospace;font-size:11px;
+  cursor:pointer;
+  transition:all .15s;
+}
+.player-counter:hover{border-color:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
+.player-counter.rad{color:#7dff5e;border-color:#3a8a3a}
+.player-counter.energy{color:#ffe040;border-color:#aa8a00}
+.player-counter.experience{color:#ff8080;border-color:#7a3030}
+.player-counter .icon{font-size:13px}
+.player-counter .num{color:var(--text-bright);min-width:14px;text-align:center}
+.player-counter.zero{opacity:.35}
+
+/* === SETTINGS BUTTON === */
+#btn-settings{
+  font-size:13px;padding:4px 8px;
+  background:transparent;border:1px solid var(--border-strong);
+  color:var(--text-dim);
+}
+#btn-settings:hover{color:var(--accent);border-color:var(--accent)}
+
+/* === MENU DE AÇÕES DA CARTA (dentro do inspector) === */
+.card-actions{
+  margin-top:12px;
+  border-top:1px dashed var(--border);
+  padding-top:10px;
+}
+.card-actions h3{font-size:11px;margin-bottom:6px;color:var(--accent)}
+.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.action-grid button{font-size:12px;padding:5px 8px;width:100%}
+
+/* === COUNTER MODAL === */
+.counter-modal-list{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;max-height:50vh;overflow-y:auto}
+.counter-row{
+  display:flex;align-items:center;gap:10px;
+  border:1px solid var(--border);background:var(--bg-panel-2);
+  padding:6px 10px;
+}
+.counter-row .ctr-name{flex:1;color:var(--text-bright);font-size:14px}
+.counter-row .ctr-controls{display:flex;gap:4px;align-items:center}
+.counter-row .ctr-controls button{padding:3px 9px;font-size:14px;min-width:30px}
+.counter-row .ctr-val{
+  min-width:36px;text-align:center;
+  font-family:'Press Start 2P',monospace;font-size:13px;color:var(--accent);
+  border:1px solid var(--border-strong);background:rgba(0,0,0,.4);padding:3px 6px;
+}
+.counter-add-row{display:flex;gap:6px;margin-top:8px}
+.counter-add-row input{
+  flex:1;background:var(--bg-deep);color:var(--text-bright);
+  border:1px solid var(--border-strong);padding:5px 8px;
+  font-family:'VT323',monospace;font-size:14px;
+}
+.counter-add-row input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
+
+/* === API KEY INPUT === */
+.settings-row{margin-bottom:12px}
+.settings-row label{display:block;color:var(--accent);font-size:12px;margin-bottom:4px;letter-spacing:1px}
+.settings-row input{
+  width:100%;background:var(--bg-deep);color:var(--text-bright);
+  border:1px solid var(--border-strong);padding:6px 8px;
+  font-family:'VT323',monospace;font-size:14px;
+}
+.settings-row input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
+.settings-row .hint{font-size:12px;color:var(--text-dim);margin-top:3px;line-height:1.4}
+.settings-row .hint a{color:var(--amber)}
+.status-ok{color:#3eff7e}
+.status-warn{color:var(--amber)}
+.status-err{color:#ff4040}
+
+/* === MODE CHOICE MODAL === */
+.mode-choice-list{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto;margin-bottom:14px}
+.mode-option{
+  display:flex;align-items:flex-start;gap:10px;
+  border:2px solid var(--border);background:var(--bg-panel-2);
+  padding:10px 12px;
+  cursor:pointer;
+  transition:all .15s;
+}
+.mode-option:hover:not(.disabled){
+  border-color:var(--accent);
+  background:rgba(62,255,126,.06);
+  transform:translateX(3px);
+}
+.mode-option.selected{
+  border-color:var(--accent);
+  background:rgba(62,255,126,.12);
+  box-shadow:0 0 12px var(--accent-glow);
+}
+.mode-option.disabled{
+  opacity:.4;cursor:not-allowed;
+}
+.mode-option .mode-check{
+  font-size:20px;color:var(--accent);
+  min-width:24px;text-align:center;
+  font-family:'Press Start 2P',monospace;
+}
+.mode-option .mode-text{flex:1}
+.mode-option .mode-label{
+  font-family:'Press Start 2P',monospace;
+  font-size:11px;color:var(--accent);
+  margin-bottom:4px;letter-spacing:1px;
+}
+.mode-option .mode-desc{
+  font-size:13px;color:var(--text-bright);
+  line-height:1.4;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap');
+
+/* ============================================================
+   TELAS
+   ============================================================ */
+.screen{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  padding:20px;
+  overflow:hidden;
+}
+.screen.hidden{display:none}
+
+/* SETUP SCREEN */
+#setup-screen{
+  align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at top, rgba(62,255,126,.08), transparent 60%);
+}
+.setup-box{
+  width:min(720px,95%);
+  border:2px solid var(--border-strong);
+  background:var(--bg-panel);
+  padding:24px;
+  box-shadow:0 0 40px rgba(62,255,126,.15), inset 0 0 30px rgba(0,0,0,.6);
+  position:relative;
+}
+.setup-box::before{
+  content:"//ROBCO INDUSTRIES — TERMLINK PROTOCOL//";
+  position:absolute;top:-12px;left:14px;
+  background:var(--bg-panel);padding:0 8px;
+  font-size:13px;color:var(--amber);letter-spacing:2px;
+}
+.setup-title{
+  font-family:'Press Start 2P',monospace;
+  font-size:18px;color:var(--accent);
+  text-align:center;margin-bottom:6px;
+  text-shadow:0 0 10px var(--accent-glow);
+}
+.setup-sub{text-align:center;color:var(--text-dim);font-size:15px;margin-bottom:22px;letter-spacing:1px}
+
+.deck-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px}
+.deck-card{
+  border:2px solid var(--border);
+  background:var(--bg-panel-2);
+  padding:14px;cursor:pointer;
+  transition:all .2s;
+  position:relative;
+}
+.deck-card:hover{border-color:var(--accent);box-shadow:0 0 18px var(--accent-glow)}
+.deck-card.selected{border-color:var(--accent);box-shadow:0 0 22px var(--accent-glow);background:linear-gradient(180deg,var(--bg-panel-2),rgba(62,255,126,.08))}
+.deck-name{font-family:'Press Start 2P',monospace;font-size:13px;color:var(--accent);margin-bottom:6px}
+.deck-cmdr{color:var(--amber);font-size:16px;margin-bottom:8px}
+.deck-colors{display:flex;gap:4px;margin-bottom:8px}
+.color-pip{width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(0,0,0,.45);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-family:'Press Start 2P',monospace;box-shadow:inset 0 -2px 4px rgba(0,0,0,.25)}
+.color-W{background:radial-gradient(circle at 30% 30%, #fffbe0, #e8d68a);color:#7a5a00}
+.color-U{background:radial-gradient(circle at 30% 30%, #c8eafd, #5fa0d0);color:#1a3a5a}
+.color-B{background:radial-gradient(circle at 30% 30%, #888, #2a2a2a);color:#fff}
+.color-R{background:radial-gradient(circle at 30% 30%, #ffc7b0, #c85a3e);color:#5a1a00}
+.color-G{background:radial-gradient(circle at 30% 30%, #b8e6c5, #4a9a5e);color:#0a3a1a}
+.deck-desc{color:var(--text-dim);font-size:14px}
+
+.difficulty-row{display:flex;gap:10px;margin-bottom:18px;justify-content:center}
+.diff-btn{flex:1;max-width:180px}
+.diff-btn.active{background:var(--accent);color:var(--bg-deep);box-shadow:0 0 18px var(--accent-glow);text-shadow:none}
+
+.setup-actions{display:flex;justify-content:center}
+#start-btn{padding:12px 32px;font-size:18px}
+
+/* LOADING SCREEN */
+#loading-screen{
+  align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at center, rgba(62,255,126,.06), transparent 70%);
+}
+.loader-box{text-align:center}
+.loader-box .scan{
+  width:300px;height:14px;border:2px solid var(--border-strong);
+  background:var(--bg-panel);margin:18px auto;position:relative;overflow:hidden;
+}
+.loader-box .scan-fill{
+  height:100%;width:0%;background:var(--accent);
+  box-shadow:0 0 10px var(--accent-glow);
+  transition:width .3s;
+}
+.loader-log{
+  margin-top:14px;font-size:14px;color:var(--text-dim);
+  max-height:160px;overflow-y:auto;text-align:left;
+  width:420px;max-width:95vw;
+  border:1px solid var(--border);padding:8px;background:rgba(0,0,0,.4);
+}
+.loader-log div{margin-bottom:2px}
+.loader-log .ok{color:var(--green)}
+.loader-log .err{color:var(--red)}
+.loader-log .info{color:var(--amber)}
+
+/* GAME SCREEN */
+#game-screen{
+  display:none;
+  grid-template-columns:1fr 280px;
+  grid-template-rows:auto 1fr auto auto;
+  gap:6px;padding:6px;
+  height:100vh;
+}
+#game-screen.visible{display:grid}
+
+#topbar{
+  grid-column:1/-1;
+  display:flex;align-items:center;justify-content:space-between;
+  border:1px solid var(--border-strong);background:var(--bg-panel);padding:6px 12px;
+  font-size:14px;
+}
+.topbar-left,.topbar-right{display:flex;gap:14px;align-items:center}
+.tb-stat{color:var(--text-dim)}
+.tb-stat strong{color:var(--accent)}
+.phase-indicator{color:var(--amber);font-family:'Press Start 2P',monospace;font-size:11px;padding:4px 10px;border:1px solid var(--amber-dim);background:rgba(255,176,0,.08)}
+
+#battlefield-area{
+  grid-column:1;grid-row:2;
+  display:flex;flex-direction:column;gap:4px;
+  overflow:hidden;
+}
+.zone-row{
+  flex:1;
+  border:1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(62,255,126,.02), transparent),
+    repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,.10) 2px 3px);
+  padding:6px;
+  overflow-x:auto;overflow-y:hidden;
+  display:flex;gap:4px;align-items:flex-start;
+  min-height:0;
+  position:relative;
+}
+.zone-row::before{
+  content:attr(data-label);
+  position:absolute;top:2px;left:6px;
+  font-size:10px;color:var(--text-dim);letter-spacing:1px;pointer-events:none;
+}
+.zone-row.drop-target{background:rgba(62,255,126,.08);border-color:var(--accent);box-shadow:inset 0 0 20px var(--accent-glow)}
+.zone-ai{border-color:rgba(255,64,64,.3)}
+.zone-ai::before{color:#aa4040}
+
+#side-panel{
+  grid-column:2;grid-row:2;
+  display:flex;flex-direction:column;gap:4px;
+  min-height:0;overflow:hidden;
+}
+.panel-box{
+  border:1px solid var(--border-strong);background:var(--bg-panel);
+  padding:8px;font-size:13px;
+}
+.panel-box h3{font-size:11px;color:var(--accent);margin-bottom:6px;letter-spacing:1px}
+#turn-log{flex:1;overflow-y:auto;min-height:0}
+#turn-log div{margin-bottom:3px;padding:2px 4px;font-size:13px;line-height:1.25}
+#turn-log .player{color:var(--accent)}
+#turn-log .ai{color:#ff8080}
+#turn-log .system{color:var(--amber)}
+#turn-log .phase{color:var(--text-bright);border-bottom:1px solid var(--border);margin:4px 0;padding-bottom:2px}
+
+#hand-area{
+  grid-column:1/-1;grid-row:3;
+  border:2px solid var(--accent);
+  background:
+    linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel)),
+    repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,.10) 2px 3px);
+  background-blend-mode: normal, multiply;
+  padding:6px;
+  display:flex;gap:4px;align-items:center;
+  overflow-x:auto;overflow-y:hidden;
+  height:170px;
+  box-shadow:inset 0 0 20px rgba(62,255,126,.08);
+}
+
+#bottom-actions{
+  grid-column:1/-1;grid-row:4;
+  display:flex;gap:6px;align-items:center;justify-content:center;
+  padding:6px;border:1px solid var(--border-strong);background:var(--bg-panel);
+}
+#bottom-actions button{padding:6px 12px;font-size:14px}
+
+/* CARDS */
+.card{
+  width:88px;height:124px;
+  flex-shrink:0;
+  border:2px solid var(--border);
+  background:var(--bg-panel-2);
+  background-image:none!important; /* sem scanline na carta */
+  border-radius:4px;
+  position:relative;cursor:grab;
+  transition:transform .15s, box-shadow .15s;
+  overflow:hidden;
+  z-index:3;
+}
+.cmdr-card-wrap{background-image:none!important;z-index:3}
+.inspector-img{background-image:none!important}
+.inspector-content{background-image:none!important}
+.card:hover{transform:translateY(-4px) scale(1.05);box-shadow:0 0 14px var(--accent-glow);z-index:50}
+.card.dragging{opacity:.4}
+.card.tapped{transform:rotate(90deg)}
+.card.tapped:hover{transform:rotate(90deg) translateY(-4px) scale(1.05)}
+.card.summoning-sick::after{
+  content:"⌛";position:absolute;top:2px;right:2px;
+  background:rgba(0,0,0,.7);color:var(--amber);
+  padding:1px 4px;font-size:10px;border-radius:2px;
+}
+.card.attacker{border-color:var(--red);box-shadow:0 0 12px rgba(255,64,64,.5)}
+.card.blocker{border-color:var(--amber);box-shadow:0 0 12px rgba(255,176,0,.5)}
+.card-img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.card-text{
+  position:absolute;inset:0;
+  padding:4px;font-size:9px;
+  color:var(--text-bright);
+  display:flex;flex-direction:column;justify-content:space-between;
+  background:linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));
+}
+.card-text .ct-name{font-weight:bold;color:var(--accent);font-size:10px;line-height:1.1;word-break:break-word}
+.card-text .ct-cost{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.7);padding:1px 3px;border-radius:2px;display:flex;gap:1px}
+.card-text .ct-cost .mana-symbol{width:11px;height:11px}
+.card-text .ct-cost .mana-symbol .glyph{font-size:7px}
+.card-text .ct-type{font-size:8px;color:var(--text-dim);border-top:1px dashed var(--border);padding-top:2px}
+.card-text .ct-pt{align-self:flex-end;font-size:11px;color:var(--amber);font-weight:bold;background:rgba(0,0,0,.6);padding:1px 4px;border-radius:2px}
+.card.face-down{background:repeating-linear-gradient(45deg,#0a1d10,#0a1d10 6px,#102818 6px,#102818 12px);border-color:var(--border-strong)}
+.card.face-down .card-img,.card.face-down .card-text{display:none}
+.card.face-down::before{content:"";position:absolute;inset:8px;border:2px dashed var(--green-dim);opacity:.4}
+
+.card-mini-info{
+  position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.85);color:var(--accent);
+  font-size:9px;padding:1px 4px;border-radius:2px;
+  white-space:nowrap;z-index:5;
+  border:1px solid var(--border);
+}
+
+/* MANA POOL DISPLAY — círculos com glifo tipo MTG */
+.mana-pool{display:flex;gap:4px;align-items:center}
+.mana-symbol{
+  width:26px;height:26px;border-radius:50%;
+  border:1.5px solid rgba(0,0,0,.45);
+  display:inline-flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:bold;font-family:'Press Start 2P',monospace;
+  position:relative;
+  box-shadow:inset 0 -2px 4px rgba(0,0,0,.25), 0 1px 2px rgba(0,0,0,.4);
+  flex-shrink:0;
+}
+.mana-symbol .mana-count{
+  position:absolute;top:-4px;right:-4px;
+  background:var(--bg-deep);color:var(--accent);
+  border:1px solid var(--accent);border-radius:50%;
+  min-width:16px;height:16px;font-size:10px;line-height:14px;text-align:center;
+  font-family:'VT323',monospace;padding:0 3px;
+}
+.mana-symbol .glyph{font-size:14px;line-height:1}
+.mana-W{background:radial-gradient(circle at 30% 30%, #fffbe0, #e8d68a);color:#7a5a00}
+.mana-U{background:radial-gradient(circle at 30% 30%, #c8eafd, #5fa0d0);color:#1a3a5a}
+.mana-B{background:radial-gradient(circle at 30% 30%, #888, #2a2a2a);color:#fff}
+.mana-R{background:radial-gradient(circle at 30% 30%, #ffc7b0, #c85a3e);color:#5a1a00}
+.mana-G{background:radial-gradient(circle at 30% 30%, #b8e6c5, #4a9a5e);color:#0a3a1a}
+.mana-C{background:radial-gradient(circle at 30% 30%, #e0e0e0, #8a8a8a);color:#222}
+.mana-N{background:radial-gradient(circle at 30% 30%, #e0e0e0, #8a8a8a);color:#222} /* genérico (número) */
+
+/* mana inline no texto/custo das cartas */
+.mana-inline{
+  display:inline-flex;gap:2px;align-items:center;vertical-align:middle;
+}
+.mana-inline .mana-symbol{width:18px;height:18px;font-size:10px}
+.mana-inline .mana-symbol .glyph{font-size:10px}
+
+/* CARD INSPECTOR (clique pra ver detalhe) */
+#inspector{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.85);
+  display:none;align-items:center;justify-content:center;
+  z-index:1000;
+}
+#inspector.visible{display:flex}
+.inspector-content{
+  display:flex;gap:20px;
+  max-width:90vw;max-height:90vh;
+  background:var(--bg-panel);
+  border:2px solid var(--accent);
+  padding:18px;
+  box-shadow:0 0 40px var(--accent-glow);
+}
+.inspector-img{
+  width:300px;height:418px;
+  border:2px solid var(--border-strong);
+  background:#000;
+  flex-shrink:0;
+  object-fit:cover;
+}
+.inspector-info{
+  width:360px;max-width:50vw;
+  color:var(--text-bright);
+  font-size:15px;
+}
+.inspector-info h2{color:var(--accent);margin-bottom:6px;font-size:18px}
+.inspector-info .ii-cost{color:var(--amber);margin-bottom:6px}
+.inspector-info .ii-type{color:var(--text-dim);margin-bottom:10px;font-style:italic}
+.inspector-info .ii-text{white-space:pre-wrap;line-height:1.5;border-top:1px dashed var(--border);padding-top:10px;color:var(--text-bright)}
+.inspector-info .ii-pt{margin-top:10px;font-size:18px;color:var(--amber);text-align:right}
+.inspector-close{position:absolute;top:6px;right:10px;font-size:24px;color:var(--red);cursor:pointer;background:none;border:none}
+
+/* CONFIRM MODAL */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.85);
+  display:none;align-items:center;justify-content:center;z-index:1100;
+}
+.modal-backdrop.visible{display:flex}
+.modal-box{
+  background:var(--bg-panel);border:2px solid var(--accent);
+  padding:20px;max-width:500px;width:90%;
+  box-shadow:0 0 30px var(--accent-glow);
+}
+.modal-box h2{margin-bottom:12px}
+.modal-box p{margin-bottom:16px;color:var(--text-bright);line-height:1.5}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+
+/* FOOTER */
+#credit{
+  position:fixed;bottom:2px;right:6px;
+  font-size:10px;color:var(--text-dim);
+  z-index:10;letter-spacing:1px;
+}
+
+/* ANIMATIONS */
+@keyframes flyFromHand{
+  from{transform:translateY(120px);opacity:0}
+  to{transform:translateY(0);opacity:1}
+}
+@keyframes flyFromDeck{
+  from{transform:translateX(-40px) scale(.5);opacity:0}
+  to{transform:translateX(0) scale(1);opacity:1}
+}
+@keyframes flash{
+  0%,100%{background:var(--bg-panel)}
+  50%{background:var(--accent);color:var(--bg-deep)}
+}
+.fly-in{animation:flyFromHand .4s ease-out}
+.draw-anim{animation:flyFromDeck .35s ease-out}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--bg-deep)}
+::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:0}
+::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+
+/* RESPONSIVE */
+@media (max-width:900px){
+  #game-screen{grid-template-columns:1fr;grid-template-rows:auto 1fr 200px auto auto}
+  #side-panel{grid-column:1;grid-row:5;max-height:180px}
+  #hand-area{grid-row:3;height:160px}
+  #bottom-actions{grid-row:4}
+  .card{width:72px;height:100px}
+  .card-text .ct-name{font-size:9px}
+}
+</style>
+</head>
+<body>
+
+<!-- ========================= SETUP SCREEN ========================= -->
+<div id="setup-screen" class="screen">
+  <div class="setup-box">
+    <div class="setup-title">WASTELAND COMMANDER</div>
+    <div class="setup-sub">MTG PLAYTEST ENGINE · V.0.11</div>
+
+    <div style="display:flex;justify-content:center;gap:8px;margin-bottom:16px">
+      <button class="lang-btn active" data-lang="pt">🇧🇷 PORTUGUÊS</button>
+      <button class="lang-btn" data-lang="en">🇺🇸 ENGLISH</button>
+    </div>
+
+    <h2 style="margin-top:6px" data-i18n="select_deck">[1] SELECIONE SEU DECK</h2>
+    <div id="user-decks-area">
+      <div class="deck-grid" id="deck-grid">
+        <!-- preenchido dinamicamente -->
+      </div>
+      <div id="no-decks-msg" style="text-align:center;color:var(--text-dim);padding:18px;font-size:13px;display:none">
+        <span data-i18n="no_decks">Nenhum deck importado ainda. Clique em "IMPORTAR DECK" abaixo.</span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:center;margin:14px 0">
+      <button id="btn-import-deck" class="amber"><span data-i18n="import_deck">📥 IMPORTAR DECK</span></button>
+      <button id="btn-manage-decks"><span data-i18n="manage_decks">⚙ GERENCIAR DECKS</span></button>
+    </div>
+
+    <h2 data-i18n="difficulty">[2] DIFICULDADE DA IA</h2>
+    <div class="difficulty-row" id="diff-row">
+      <button class="diff-btn" data-diff="easy" data-i18n="easy">FÁCIL</button>
+      <button class="diff-btn active" data-diff="medium" data-i18n="medium">MÉDIO</button>
+      <button class="diff-btn" data-diff="hard" data-i18n="hard">DIFÍCIL</button>
+    </div>
+
+    <h2 data-i18n="opponent_deck">[3] DECK DO OPONENTE</h2>
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:14px">
+      <button id="opp-same" class="diff-btn active" data-opp="same"><span data-i18n="opp_same">MESMO DECK QUE EU</span></button>
+      <button id="opp-other" class="diff-btn" data-opp="other"><span data-i18n="opp_other">OUTRO DECK MEU</span></button>
+    </div>
+
+    <div class="setup-actions" style="flex-direction:column;gap:8px">
+      <button id="start-btn" class="amber" disabled data-i18n="start">► INICIAR BATALHA</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= LOADING SCREEN ========================= -->
+<div id="loading-screen" class="screen hidden">
+  <div class="loader-box">
+    <h1 data-i18n="loading_title">CARREGANDO DECKS</h1>
+    <div class="setup-sub" data-i18n="loading_sub">Conectando ao RobCo Card Database (Scryfall)...</div>
+    <div class="scan"><div class="scan-fill" id="scan-fill"></div></div>
+    <div class="loader-log" id="loader-log"></div>
+    <div id="loader-fallback-actions" style="margin-top:14px;display:none">
+      <div style="color:var(--amber);font-size:14px;margin-bottom:8px;letter-spacing:1px">
+        <span data-i18n="network_help_title">SEM ACESSO À INTERNET?</span>
+      </div>
+      <div style="color:var(--text-dim);font-size:13px;margin-bottom:10px;text-align:left;line-height:1.5">
+        <span data-i18n="network_help_body">Parece que o navegador não consegue acessar a Scryfall (CORS / sandbox). Você pode tentar o modo demo (cartas sem imagens, jogável pra testar) ou abrir esse HTML num servidor local.</span>
+      </div>
+      <button onclick="forceStartDemoMode()" class="amber" style="margin-right:6px"><span data-i18n="enter_demo">► ENTRAR EM MODO DEMO</span></button>
+      <button onclick="showHowToHost()"><span data-i18n="how_to_host">📖 COMO RODAR EM SERVIDOR</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= GAME SCREEN ========================= -->
+<div id="game-screen" class="screen hidden">
+  <div id="topbar">
+    <div class="topbar-left">
+      <div class="tb-stat">IA ❤ <strong id="ai-life">40</strong></div>
+      <div class="tb-stat">CMDR DMG: <strong id="ai-cmdr-dmg">0</strong></div>
+      <div class="tb-stat">Mão IA: <strong id="ai-hand-count">0</strong></div>
+      <div class="tb-stat">Deck IA: <strong id="ai-deck-count">0</strong></div>
+      <div class="player-counter rad zero" id="ai-rad" onclick="openPlayerCounterModal('ai')" title="Rad Counters (IA)">
+        <span class="icon">☢️</span><span class="num" id="ai-rad-num">0</span>
+      </div>
+      <div class="player-counter energy zero" id="ai-energy" onclick="openPlayerCounterModal('ai')" title="Energy (IA)">
+        <span class="icon">⚡</span><span class="num" id="ai-energy-num">0</span>
+      </div>
+    </div>
+    <div class="phase-indicator" id="phase-indicator">TURNO 1 · UNTAP</div>
+    <div class="topbar-right">
+      <div class="tb-stat">Você ❤ <strong id="player-life">40</strong></div>
+      <div class="tb-stat">CMDR DMG: <strong id="player-cmdr-dmg">0</strong></div>
+      <div class="tb-stat">Deck: <strong id="player-deck-count">0</strong></div>
+      <div class="player-counter rad zero" id="player-rad" onclick="openPlayerCounterModal('player')" title="Rad Counters (Você)">
+        <span class="icon">☢️</span><span class="num" id="player-rad-num">0</span>
+      </div>
+      <div class="player-counter energy zero" id="player-energy" onclick="openPlayerCounterModal('player')" title="Energy (Você)">
+        <span class="icon">⚡</span><span class="num" id="player-energy-num">0</span>
+      </div>
+      <div class="mana-pool" id="mana-pool"></div>
+      <button id="btn-settings" onclick="openSettingsModal()" title="Configurações">⚙️</button>
+    </div>
+  </div>
+
+  <div id="battlefield-area">
+    <div class="zone-row zone-ai" data-zone="ai-lands" data-label="IA · TERRENOS"></div>
+    <div class="zone-row zone-ai" data-zone="ai-battlefield" data-label="IA · BATALHA"></div>
+    <div class="zone-row" data-zone="player-battlefield" data-label="VOCÊ · BATALHA"></div>
+    <div class="zone-row" data-zone="player-lands" data-label="VOCÊ · TERRENOS"></div>
+  </div>
+
+  <div id="side-panel">
+    <div class="panel-box" id="commander-display" style="padding:6px">
+      <h3 data-i18n="cmdr_label" style="margin-bottom:4px">// COMMANDER</h3>
+      <div id="cmdr-zone-status" class="cmdr-status"></div>
+      <div id="cmdr-card-area">
+        <!-- preenchido por JS: imagem da carta + custo + botão -->
+      </div>
+    </div>
+    <div class="panel-box" id="turn-log-box" style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <h3 data-i18n="log_label">// REGISTRO DE TURNO</h3>
+      <div id="turn-log"></div>
+    </div>
+  </div>
+
+  <div id="hand-area"></div>
+
+  <div id="bottom-actions">
+    <button id="btn-main" data-i18n="main1">3. MAIN 1</button>
+    <button id="btn-combat" class="amber" data-i18n="combat">4. ATAQUE</button>
+    <button id="btn-main2" data-i18n="main2">5. MAIN 2</button>
+    <button id="btn-end" class="red" data-i18n="end_turn">6. FIM</button>
+    <button id="btn-pass" data-i18n="next">▶ PRÓXIMO (IA)</button>
+    <button id="btn-explain" class="amber" data-i18n="explain">❓ EXPLICAR</button>
+    <button id="btn-concede" class="red" data-i18n="concede">DESISTIR</button>
+  </div>
+</div>
+
+<!-- ========================= INSPECTOR ========================= -->
+<div id="inspector">
+  <div class="inspector-content" style="position:relative">
+    <button class="inspector-close" onclick="closeInspector()">✕</button>
+    <img class="inspector-img" id="ii-img" src="" alt="">
+    <div class="inspector-info">
+      <h2 id="ii-name">—</h2>
+      <div class="ii-cost" id="ii-cost"></div>
+      <div class="ii-type" id="ii-type"></div>
+      <div class="ii-text" id="ii-text"></div>
+      <div class="ii-pt" id="ii-pt"></div>
+      <div id="ii-explain-area" style="margin-top:12px;display:none">
+        <div style="border-top:1px dashed var(--accent);padding-top:10px">
+          <h3 style="font-size:12px" data-i18n="explanation">EXPLICAÇÃO</h3>
+          <div id="ii-explain-text" style="font-size:14px;color:var(--text-bright);line-height:1.5;white-space:pre-wrap"></div>
+          <button id="ii-deepen" class="amber" style="margin-top:8px;font-size:12px;padding:4px 10px" data-i18n="deepen">🧠 APROFUNDAR (CLAUDE API)</button>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button id="ii-explain-btn" class="amber" style="font-size:13px;padding:6px 12px" data-i18n="explain_card">❓ EXPLICAR ESTA CARTA</button>
+      </div>
+      <div class="card-actions" id="ii-actions" style="display:none">
+        <h3 data-i18n="card_actions">AÇÕES NA CARTA</h3>
+        <div class="action-grid">
+          <button onclick="cardAction_tap()" id="ii-act-tap" data-i18n="act_tap">↻ TAP / UNTAP</button>
+          <button onclick="cardAction_counters()" id="ii-act-counters" data-i18n="act_counters">⊕ CONTADORES</button>
+          <button onclick="cardAction_destroy()" class="red" id="ii-act-destroy" data-i18n="act_destroy">💀 IR P/ CEMITÉRIO</button>
+          <button onclick="cardAction_exile()" class="red" id="ii-act-exile" data-i18n="act_exile">⛓️ EXILAR</button>
+          <button onclick="cardAction_return_hand()" id="ii-act-hand" data-i18n="act_return">↩ MÃO</button>
+          <button onclick="cardAction_top_library()" id="ii-act-top" data-i18n="act_top">📚 TOPO DECK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= MODAL ========================= -->
+<div id="modal" class="modal-backdrop">
+  <div class="modal-box">
+    <h2 id="modal-title">—</h2>
+    <p id="modal-body">—</p>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<div id="credit">By Bah né meu. (Bruno Vidal) — V.0.11</div>
+
+<!-- ============================================================
+     SCRIPT
+     ============================================================ -->
+<script>
+/* === ESTADO GLOBAL === */
+const GAME = {
+  player: null, ai: null,
+  difficulty:'medium',
+  turn:1, activePlayer:'player', phase:'untap',
+  manaPool:{W:0,U:0,B:0,R:0,G:0,C:0},
+  attackers:[], blockers:{},
+  aiQueue:[],
+  log:[],
+  cardCounter:0,
+  lang:'pt',
+  currentInspectorCard:null,
+  currentInspectorCardObj:null, // referência ao OBJETO da carta (não só data) — pra ações de mover/counters
+  currentInspectorOwner:null,   // 'player' | 'ai'
+  apiKey: localStorage.getItem('claude_api_key')||'',
+  aiAuto: localStorage.getItem('ai_auto') !== '0', // default true
+  aiDelay: parseInt(localStorage.getItem('ai_delay')) || 900,
+  aiPaused: false,
+};
+
+/* === I18N === */
+const I18N = {
+  pt:{
+    select_deck:'[1] SELECIONE SEU DECK',
+    difficulty:'[2] DIFICULDADE DA IA',
+    easy:'FÁCIL',medium:'MÉDIO',hard:'DIFÍCIL',
+    start:'► INICIAR BATALHA',
+    loading_title:'CARREGANDO DECKS',
+    loading_sub:'Conectando à Scryfall...',
+    deck_science_desc:'',
+    deck_mutants_desc:'',
+    main1:'3. MAIN 1',main2:'5. MAIN 2',combat:'4. ATAQUE',
+    end_turn:'6. FIM',next:'▶ PRÓXIMO (IA)',
+    no_decks:'Nenhum deck importado ainda. Clique em "IMPORTAR DECK" abaixo.',
+    import_deck:'📥 IMPORTAR DECK',
+    manage_decks:'⚙ GERENCIAR DECKS',
+    opponent_deck:'[3] DECK DO OPONENTE',
+    opp_same:'MESMO DECK QUE EU',
+    opp_other:'OUTRO DECK MEU',
+    explain:'❓ EXPLICAR',explain_card:'❓ EXPLICAR ESTA CARTA',
+    explanation:'EXPLICAÇÃO',deepen:'🧠 APROFUNDAR (CLAUDE API)',
+    concede:'DESISTIR',
+    your_turn:'Não é seu turno',
+    only_land_per_turn:'⚠️ Você já jogou um terreno neste turno (limite: 1 por turno)',
+    only_main_phase:'⚠️ Terrenos só podem ser jogados em Main Phase (fase principal)',
+    not_a_land:'⚠️ Isso não é um terreno — terrenos têm tipo "Land/Terreno"',
+    lands_zone_wrong:'⚠️ Terrenos vão na zona de terrenos (linha logo acima)',
+    spells_main_only:'⚠️ Conjuros (criaturas/artefatos/encantamentos) só em Main Phase',
+    sorceries_main_only:'⚠️ Feitiços só em Main Phase',
+    not_enough_mana:'⚠️ Mana insuficiente. Tape terrenos pra produzir mana primeiro.',
+    not_enough_mana_cmdr:'⚠️ Mana insuficiente. Custo do Commander: {cost} + {tax} (taxa de recast)',
+    already_tapped:'⚠️ Esta carta já está tappada',
+    sickness:'⚠️ Esta criatura tem mal de invocação (foi conjurada neste turno) — não pode atacar',
+    tapped_cant_attack:'⚠️ Criaturas tappadas não podem atacar',
+    no_commander:'⚠️ Sem commander na command zone',
+    click_creatures_attack:'Clique nas suas criaturas pra declarar atacantes. Depois "PRÓXIMO" pra confirmar.',
+    you_played_land:'Você jogou terreno: {name}',
+    you_cast:'Você conjurou {name}',
+    you_drew:'Você comprou 1 carta',
+    discard_to_seven:'Você tinha {n} cartas. Descartadas as mais caras pra chegar a 7.',
+    game_started:'Jogo iniciado. Você começa.',
+    starting_hand:'Sua mão inicial: 7 cartas. Vida: 40.',
+    end_your_turn:'--- FIM DO SEU TURNO ---',
+    end_ai_turn:'--- FIM DO TURNO DA IA ---',
+    your_turn_n:'--- TURNO {n} (SEU) ---',
+    ai_turn:'TURNO DA IA — clique em "PRÓXIMO" pra avançar passo a passo',
+    ai_attacks:'IA atacou! Clique nas atacantes da IA + nas suas criaturas pra bloquear, depois "PRÓXIMO".',
+    no_card_to_explain:'⚠️ Nenhuma carta selecionada. Clique numa carta primeiro pra ver detalhes.',
+    explaining:'Gerando explicação...',
+    deepening:'Consultando Claude API...',
+    api_error:'⚠️ Erro ao consultar Claude API: {msg}',
+    victory:'VITÓRIA!',defeat:'DERROTA',
+    new_game:'NOVA PARTIDA',close:'FECHAR',
+    confirm:'CONFIRMAR',cancel:'CANCELAR',ok:'OK',yes_concede:'SIM, DESISTIR',no:'NÃO',
+    concede_q:'DESISTIR?',concede_body:'Tem certeza que quer abandonar a partida?',
+    cmdr_back:'{name} volta pra command zone',
+    to_graveyard:'{name} → cemitério',
+    you_died_life:'Você morreu (vida 0)',
+    ai_died_life:'IA derrotada (vida 0)',
+    cmdr_dmg_you:'21 de dano de commander em você!',
+    cmdr_dmg_ai:'21 de dano de commander na IA!',
+    deck_out:'Deck out — biblioteca vazia',
+    choose_mana_color:'ESCOLHA A COR DE MANA',
+    mana_choice_body:'{name} pode produzir múltiplas cores. Qual?',
+    cast_cmdr_btn:'► CONJURAR',
+    you_cast_cmdr:'► Você conjurou seu Commander: {name} (tax: {tax})',
+    log_label:'// REGISTRO DE TURNO',
+    cmdr_label:'// COMMANDER',
+    not_a_permanent:'⚠️ Esta carta é uma magia (Instant/Sorcery), não vai pro campo direto.',
+    // V.0.3
+    card_actions:'AÇÕES NA CARTA',
+    act_tap:'↻ TAP / UNTAP',
+    act_counters:'⊕ CONTADORES',
+    act_destroy:'💀 IR P/ CEMITÉRIO',
+    act_exile:'⛓️ EXILAR',
+    act_return:'↩ VOLTAR P/ MÃO',
+    act_top:'📚 TOPO DO DECK',
+    counters_title:'CONTADORES EM {name}',
+    counters_player_title:'CONTADORES DO JOGADOR',
+    counter_add:'ADICIONAR',
+    counter_type_placeholder:'Tipo (ex: +1/+1, rad, charge, quest)',
+    no_counters:'(sem contadores)',
+    settings_title:'⚙️ CONFIGURAÇÕES',
+    api_key_label:'CHAVE DA API DA ANTHROPIC',
+    api_key_hint:'Necessária só para o botão "APROFUNDAR" no inspector da carta. A chave fica salva localmente no seu navegador (localStorage). Pegue em <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a>.',
+    api_key_save:'SALVAR',
+    api_key_clear:'LIMPAR',
+    api_key_saved:'Chave salva localmente.',
+    api_key_cleared:'Chave removida.',
+    api_key_missing:'⚠️ Sem chave API. Abra ⚙️ Configurações pra colar tua chave da Anthropic.',
+    api_key_status_set:'✓ Chave configurada',
+    api_key_status_none:'⚠ Sem chave (botão APROFUNDAR não funciona)',
+    save:'SALVAR',clear:'LIMPAR',close_settings:'FECHAR',
+    rad_counters:'Contadores de Radiação',
+    energy_counters:'Contadores de Energia',
+    cmdr_dmg_received:'Dano de Commander Recebido',
+    auto_added_rad:'☢️ +{n} rad em {who} (auto)',
+    auto_added_energy:'⚡ +{n} energia em {who} (auto)',
+    enters_with_counters:'⊕ {name} entra com {n} contador(es) {type}',
+    you_label:'você',
+    ai_label:'IA',
+    demo_mode_label:'MODO DEMO (sem internet, cartas sem imagens)',
+    demo_banner:'⚠ MODO DEMO ATIVO — cartas sem imagens, efeitos manuais',
+    network_help_title:'SEM ACESSO À INTERNET?',
+    network_help_body:'Parece que o navegador não consegue acessar a Scryfall (CORS/sandbox). Você pode tentar o modo demo (cartas sem imagens, jogável pra testar) ou abrir esse HTML num servidor local.',
+    enter_demo:'► ENTRAR EM MODO DEMO',
+    how_to_host:'📖 COMO RODAR EM SERVIDOR',
+    how_to_host_title:'COMO ABRIR O HTML CORRETAMENTE',
+    how_to_host_body:'Pra carregar imagens reais da Scryfall, o HTML precisa rodar via HTTP (não file:// nem dentro de iframe sandboxed). Opções:\n\n<strong>1. Servidor local rápido (Python):</strong>\n• Abra o terminal/cmd na pasta do arquivo\n• Rode: <code>python -m http.server 8000</code>\n• Abra no navegador: <code>http://localhost:8000/mtg_commander_fallout_v07.html</code>\n\n<strong>2. Servidor local (Node):</strong>\n• Na pasta, rode: <code>npx serve</code>\n• Acesse a URL mostrada\n\n<strong>3. Hospedar online de graça:</strong>\n• GitHub Pages, Netlify, Cloudflare Pages\n• Funciona também no celular\n\n<strong>4. No celular:</strong>\n• Hospede online (item 3) e abra pelo navegador',
+  },
+  en:{
+    select_deck:'[1] SELECT YOUR DECK',
+    difficulty:'[2] AI DIFFICULTY',
+    easy:'EASY',medium:'MEDIUM',hard:'HARD',
+    start:'► START BATTLE',
+    loading_title:'LOADING DECKS',
+    loading_sub:'Connecting to Scryfall...',
+    deck_science_desc:'',
+    deck_mutants_desc:'',
+    main1:'3. MAIN 1',main2:'5. MAIN 2',combat:'4. ATTACK',
+    end_turn:'6. END',next:'▶ NEXT (AI)',
+    no_decks:'No deck imported yet. Click "IMPORT DECK" below.',
+    import_deck:'📥 IMPORT DECK',
+    manage_decks:'⚙ MANAGE DECKS',
+    opponent_deck:'[3] OPPONENT DECK',
+    opp_same:'SAME DECK AS ME',
+    opp_other:'ANOTHER OF MY DECKS',
+    explain:'❓ EXPLAIN',explain_card:'❓ EXPLAIN THIS CARD',
+    explanation:'EXPLANATION',deepen:'🧠 DEEPEN (CLAUDE API)',
+    concede:'CONCEDE',
+    your_turn:"It's not your turn",
+    only_land_per_turn:'⚠️ You already played a land this turn (limit: 1 per turn)',
+    only_main_phase:'⚠️ Lands can only be played in Main Phase',
+    not_a_land:'⚠️ This is not a land',
+    lands_zone_wrong:'⚠️ Lands go in the lands zone (row above)',
+    spells_main_only:'⚠️ Permanents (creatures/artifacts/enchantments) only in Main Phase',
+    sorceries_main_only:'⚠️ Sorceries only in Main Phase',
+    not_enough_mana:'⚠️ Not enough mana. Tap lands to produce mana first.',
+    not_enough_mana_cmdr:'⚠️ Not enough mana. Commander cost: {cost} + {tax} (recast tax)',
+    already_tapped:'⚠️ Already tapped',
+    sickness:"⚠️ Summoning sickness — this creature can't attack this turn",
+    tapped_cant_attack:"⚠️ Tapped creatures can't attack",
+    no_commander:'⚠️ No commander in command zone',
+    click_creatures_attack:'Click your creatures to declare attackers, then "NEXT" to confirm.',
+    you_played_land:'You played land: {name}',
+    you_cast:'You cast {name}',
+    you_drew:'You drew 1 card',
+    discard_to_seven:'You had {n} cards. Discarded most expensive to reach 7.',
+    game_started:'Game started. You go first.',
+    starting_hand:'Starting hand: 7 cards. Life: 40.',
+    end_your_turn:'--- END OF YOUR TURN ---',
+    end_ai_turn:'--- END OF AI TURN ---',
+    your_turn_n:'--- TURN {n} (YOUR) ---',
+    ai_turn:'AI TURN — click "NEXT" to step through actions',
+    ai_attacks:'AI attacks! Click AI attackers + your creatures to block, then "NEXT".',
+    no_card_to_explain:'⚠️ No card selected. Click a card first to see details.',
+    explaining:'Generating explanation...',
+    deepening:'Consulting Claude API...',
+    api_error:'⚠️ Error calling Claude API: {msg}',
+    victory:'VICTORY!',defeat:'DEFEAT',
+    new_game:'NEW GAME',close:'CLOSE',
+    confirm:'CONFIRM',cancel:'CANCEL',ok:'OK',yes_concede:'YES, CONCEDE',no:'NO',
+    concede_q:'CONCEDE?',concede_body:'Are you sure you want to abandon this match?',
+    cmdr_back:'{name} returns to command zone',
+    to_graveyard:'{name} → graveyard',
+    you_died_life:'You died (life 0)',
+    ai_died_life:'AI defeated (life 0)',
+    cmdr_dmg_you:'21 commander damage on you!',
+    cmdr_dmg_ai:'21 commander damage on AI!',
+    deck_out:'Deck out — library empty',
+    choose_mana_color:'CHOOSE MANA COLOR',
+    mana_choice_body:'{name} can produce multiple colors. Which?',
+    cast_cmdr_btn:'► CAST',
+    you_cast_cmdr:'► You cast your Commander: {name} (tax: {tax})',
+    log_label:'// TURN LOG',
+    cmdr_label:'// COMMANDER',
+    not_a_permanent:'⚠️ This card is a spell (Instant/Sorcery), not a permanent.',
+    // V.0.3
+    card_actions:'CARD ACTIONS',
+    act_tap:'↻ TAP / UNTAP',
+    act_counters:'⊕ COUNTERS',
+    act_destroy:'💀 TO GRAVEYARD',
+    act_exile:'⛓️ EXILE',
+    act_return:'↩ TO HAND',
+    act_top:'📚 TOP OF DECK',
+    counters_title:'COUNTERS ON {name}',
+    counters_player_title:'PLAYER COUNTERS',
+    counter_add:'ADD',
+    counter_type_placeholder:'Type (e.g. +1/+1, rad, charge, quest)',
+    no_counters:'(no counters)',
+    settings_title:'⚙️ SETTINGS',
+    api_key_label:'ANTHROPIC API KEY',
+    api_key_hint:'Required only for the "DEEPEN" button on card inspector. Key is stored locally in your browser (localStorage). Get it at <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a>.',
+    api_key_save:'SAVE',
+    api_key_clear:'CLEAR',
+    api_key_saved:'Key saved locally.',
+    api_key_cleared:'Key removed.',
+    api_key_missing:'⚠️ No API key. Open ⚙️ Settings to paste your Anthropic key.',
+    api_key_status_set:'✓ Key configured',
+    api_key_status_none:'⚠ No key (DEEPEN button won\'t work)',
+    save:'SAVE',clear:'CLEAR',close_settings:'CLOSE',
+    rad_counters:'Radiation Counters',
+    energy_counters:'Energy Counters',
+    cmdr_dmg_received:'Commander Damage Received',
+    auto_added_rad:'☢️ +{n} rad to {who} (auto)',
+    auto_added_energy:'⚡ +{n} energy to {who} (auto)',
+    enters_with_counters:'⊕ {name} enters with {n} {type} counter(s)',
+    you_label:'you',
+    ai_label:'AI',
+    demo_mode_label:'DEMO MODE (no internet, cards without images)',
+    demo_banner:'⚠ DEMO MODE ACTIVE — no images, manual effects',
+    network_help_title:'NO INTERNET ACCESS?',
+    network_help_body:'Browser cannot access Scryfall (CORS/sandbox). You can try demo mode (cards without images, playable for testing) or open this HTML in a local server.',
+    enter_demo:'► ENTER DEMO MODE',
+    how_to_host:'📖 HOW TO RUN ON SERVER',
+    how_to_host_title:'HOW TO OPEN THIS HTML CORRECTLY',
+    how_to_host_body:'To load real Scryfall images, the HTML needs to run via HTTP (not file:// nor inside sandboxed iframe). Options:\n\n<strong>1. Quick local server (Python):</strong>\n• Open terminal in the file folder\n• Run: <code>python -m http.server 8000</code>\n• Open: <code>http://localhost:8000/mtg_commander_fallout_v07.html</code>\n\n<strong>2. Local server (Node):</strong>\n• In folder, run: <code>npx serve</code>\n• Open the shown URL\n\n<strong>3. Free hosting:</strong>\n• GitHub Pages, Netlify, Cloudflare Pages\n• Works on mobile too\n\n<strong>4. On mobile:</strong>\n• Host online (item 3) and open in browser',
+  }
+};
+
+function t(key, vars){
+  let s = (I18N[GAME.lang]||I18N.pt)[key] || key;
+  if(vars){
+    for(const k in vars) s=s.replace('{'+k+'}', vars[k]);
+  }
+  return s;
+}
+
+function applyI18n(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    el.textContent = t(el.dataset.i18n);
+  });
+}
+
+/* === SÍMBOLOS DE MANA — círculos coloridos com glifo === */
+const MANA_GLYPH = {W:'☀',U:'◈',B:'☠',R:'🔥',G:'❋',C:'◇'};
+function manaSymbolHTML(color, count){
+  const glyph = MANA_GLYPH[color] || '?';
+  const countHTML = count!=null ? `<span class="mana-count">${count}</span>` : '';
+  return `<div class="mana-symbol mana-${color}"><span class="glyph">${glyph}</span>${countHTML}</div>`;
+}
+/* Renderiza um custo "{2}{U}{W}" como sequência de bolinhas */
+function renderManaCost(costStr){
+  if(!costStr) return '';
+  const parts=[];
+  const matches=costStr.matchAll(/\{([^}]+)\}/g);
+  for(const m of matches){
+    const s=m[1];
+    if(/^\d+$/.test(s)){
+      parts.push(`<div class="mana-symbol mana-N"><span class="glyph">${s}</span></div>`);
+    }else if('WUBRG'.includes(s)){
+      parts.push(`<div class="mana-symbol mana-${s}"><span class="glyph">${MANA_GLYPH[s]}</span></div>`);
+    }else if(s==='C'){
+      parts.push(`<div class="mana-symbol mana-C"><span class="glyph">◇</span></div>`);
+    }else if(s==='X'){
+      parts.push(`<div class="mana-symbol mana-N"><span class="glyph">X</span></div>`);
+    }else{
+      // híbridos / fáseamana / outros: mostra texto bruto
+      parts.push(`<div class="mana-symbol mana-N" title="${s}"><span class="glyph" style="font-size:8px">${s}</span></div>`);
+    }
+  }
+  return `<span class="mana-inline">${parts.join('')}</span>`;
+}
+
+/* === DECKLISTS HARDCODED (oficiais Wizards) === */
+const DECKS = JSON.parse(localStorage.getItem('mtg_user_decks') || '{}');
+
+const CARD_DATABASE = {}; // V.0.11: removido — decks importados via UI
+
+/* === SETUP UI === */
+let selectedDeck=null;
+
+// Toggle idioma
+document.querySelectorAll('.lang-btn').forEach(el=>{
+  el.addEventListener('click',()=>{
+    document.querySelectorAll('.lang-btn').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    GAME.lang=el.dataset.lang;
+    applyI18n();
+  });
+});
+
+// V.0.11: Decks são salvos no localStorage e renderizados dinamicamente.
+let opponentMode = 'same'; // 'same' ou 'other'
+let selectedOpponentDeck = null;
+
+function renderDeckGrid(){
+  const grid = document.getElementById('deck-grid');
+  const noMsg = document.getElementById('no-decks-msg');
+  const keys = Object.keys(DECKS);
+  if(keys.length === 0){
+    grid.innerHTML = '';
+    noMsg.style.display = 'block';
+    document.getElementById('start-btn').disabled = true;
+    return;
+  }
+  noMsg.style.display = 'none';
+  grid.innerHTML = '';
+  for(const key of keys){
+    const d = DECKS[key];
+    const card = document.createElement('div');
+    card.className = 'deck-card';
+    card.dataset.deck = key;
+    // detecta cores únicas dos custos do deck pra mostrar pips
+    const colors = new Set();
+    (d.list || []).forEach(n => {
+      // pega do CARD_DATABASE se tiver, mas aqui só usamos accent definido
+    });
+    const colorMap = {W:{c:'#fffbd8',g:'☀'},U:{c:'#6ec7ff',g:'◈'},B:{c:'#a880b8',g:'☠'},R:{c:'#ff6b40',g:'🔥'},G:{c:'#5ecf6e',g:'❋'}};
+    let pipsHTML = '';
+    if(d.colors && d.colors.length){
+      pipsHTML = '<div class="deck-colors">';
+      d.colors.forEach(col => {
+        const m = colorMap[col];
+        if(m) pipsHTML += `<span class="color-pip" style="color:${m.c}">${m.g}</span>`;
+      });
+      pipsHTML += '</div>';
+    }
+    card.innerHTML = `
+      <div class="deck-name">${escapeHTML(d.name||key).toUpperCase()}</div>
+      <div class="deck-cmdr">${escapeHTML(d.commander||'(sem commander)')}</div>
+      ${pipsHTML}
+      <div class="deck-desc">${(d.list||[]).length} cartas</div>
+    `;
+    card.addEventListener('click', ()=>{
+      document.querySelectorAll('#deck-grid .deck-card').forEach(c=>c.classList.remove('selected'));
+      card.classList.add('selected');
+      selectedDeck = key;
+      updateStartBtn();
+      if(d.accent){
+        document.documentElement.style.setProperty('--accent', d.accent);
+        document.documentElement.style.setProperty('--accent-glow', d.accent+'73');
+      }
+    });
+    grid.appendChild(card);
+  }
+}
+
+function escapeHTML(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function updateStartBtn(){
+  const btn = document.getElementById('start-btn');
+  const hasMine = !!selectedDeck;
+  const hasOpp = opponentMode === 'same' ? hasMine : (!!selectedOpponentDeck);
+  btn.disabled = !(hasMine && hasOpp);
+}
+
+// Handler de difficulty
+document.querySelectorAll('.diff-btn[data-diff]').forEach(el=>{
+  el.addEventListener('click',()=>{
+    document.querySelectorAll('.diff-btn[data-diff]').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    GAME.difficulty=el.dataset.diff;
+  });
+});
+
+// Handler de oponente
+document.querySelectorAll('.diff-btn[data-opp]').forEach(el=>{
+  el.addEventListener('click',()=>{
+    document.querySelectorAll('.diff-btn[data-opp]').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    opponentMode = el.dataset.opp;
+    if(opponentMode === 'other'){
+      // abre prompt pra escolher outro deck
+      const keys = Object.keys(DECKS).filter(k=>k!==selectedDeck);
+      if(keys.length === 0){
+        toast(GAME.lang==='pt'?'Você só tem 1 deck importado. Importe outro pra usar esta opção.':'You only have 1 deck imported. Import another to use this option.');
+        // volta pra "same"
+        opponentMode = 'same';
+        document.querySelectorAll('.diff-btn[data-opp]').forEach(b=>b.classList.remove('active'));
+        document.querySelector('.diff-btn[data-opp="same"]').classList.add('active');
+        return;
+      }
+      // mostra modal pra escolher
+      openOpponentDeckChooser(keys);
+    } else {
+      selectedOpponentDeck = null;
+    }
+    updateStartBtn();
+  });
+});
+
+function openOpponentDeckChooser(keys){
+  const isPt = GAME.lang==='pt';
+  let html = `<div style="color:var(--text-dim);margin-bottom:10px">${isPt?'Qual dos seus decks a IA usa?':'Which of your decks does the AI use?'}</div>`;
+  html += '<div style="display:flex;flex-direction:column;gap:6px">';
+  for(const k of keys){
+    const d = DECKS[k];
+    html += `<button class="opp-choose-btn" data-key="${k}" style="padding:10px;text-align:left">${escapeHTML(d.name||k)} — ${(d.list||[]).length} cards</button>`;
+  }
+  html += '</div>';
+  confirmModal(isPt?'ESCOLHA O DECK DA IA':'CHOOSE AI DECK', html, [{label:isPt?'CANCELAR':'CANCEL',cls:'',fn:()=>{
+    // volta pra "same"
+    opponentMode = 'same';
+    document.querySelectorAll('.diff-btn[data-opp]').forEach(b=>b.classList.remove('active'));
+    document.querySelector('.diff-btn[data-opp="same"]').classList.add('active');
+    updateStartBtn();
+  }}]);
+  setTimeout(()=>{
+    document.querySelectorAll('.opp-choose-btn').forEach(b=>{
+      b.addEventListener('click',()=>{
+        selectedOpponentDeck = b.dataset.key;
+        document.getElementById('modal').classList.remove('visible');
+        updateStartBtn();
+        toast((GAME.lang==='pt'?'IA vai usar: ':'AI will use: ')+DECKS[selectedOpponentDeck].name);
+      });
+    });
+  },50);
+}
+
+document.getElementById('start-btn').addEventListener('click',startGame);
+
+// === IMPORT DECK ===
+document.getElementById('btn-import-deck').addEventListener('click',openImportDeckModal);
+document.getElementById('btn-manage-decks').addEventListener('click',openManageDecksModal);
+
+function openImportDeckModal(){
+  const isPt = GAME.lang==='pt';
+  const html = `
+    <div style="color:var(--text-dim);font-size:13px;margin-bottom:10px;line-height:1.5">
+      ${isPt
+        ? 'Cole sua decklist abaixo. Formato: <code>1 NomeDaCarta</code> por linha. A primeira linha marcada com <code>// commander</code> ou primeira carta legendary será o commander.'
+        : 'Paste your decklist below. Format: <code>1 CardName</code> per line. The line marked <code>// commander</code> or first legendary creature will be the commander.'}
+    </div>
+    <div style="margin-bottom:8px">
+      <label style="font-size:12px;color:var(--text-dim)">${isPt?'Nome do deck':'Deck name'}:</label>
+      <input id="import-deck-name" type="text" placeholder="${isPt?'Ex: Meu Deck Verde':'Ex: My Green Deck'}" style="width:100%;padding:6px;background:var(--bg-panel-2);border:1.5px solid var(--border);color:var(--text-bright);font-family:inherit">
+    </div>
+    <div style="margin-bottom:8px">
+      <label style="font-size:12px;color:var(--text-dim)">${isPt?'Decklist (100 cartas + commander):':'Decklist (100 cards + commander):'}</label>
+      <textarea id="import-deck-text" rows="14" placeholder="1 Sol Ring&#10;1 Command Tower&#10;1 Arcane Signet&#10;// commander&#10;1 Atraxa, Praetors' Voice&#10;..." style="width:100%;padding:6px;background:var(--bg-panel-2);border:1.5px solid var(--border);color:var(--text-bright);font-family:'VT323',monospace;font-size:14px;resize:vertical"></textarea>
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">
+      ${isPt?'💡 Dica: o app vai puxar imagens e textos da Scryfall pra cada carta.':'💡 Tip: the app will fetch images and texts from Scryfall for each card.'}
+    </div>
+  `;
+  confirmModal(isPt?'📥 IMPORTAR DECK':'📥 IMPORT DECK', html, [
+    {label:isPt?'IMPORTAR':'IMPORT', cls:'amber', fn:()=>{
+      const name = document.getElementById('import-deck-name').value.trim();
+      const text = document.getElementById('import-deck-text').value.trim();
+      if(!name){ toast(isPt?'Dê um nome ao deck':'Give the deck a name'); openImportDeckModal(); return; }
+      if(!text){ toast(isPt?'Cole a decklist':'Paste the decklist'); openImportDeckModal(); return; }
+      const parsed = parseDecklist(text);
+      if(parsed.error){
+        toast(parsed.error);
+        openImportDeckModal();
+        return;
+      }
+      // gera chave única
+      let key = name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+      if(!key) key = 'deck_'+Date.now();
+      // evita colisão
+      let i = 1;
+      let finalKey = key;
+      while(DECKS[finalKey]){ finalKey = key+'_'+i; i++; }
+      DECKS[finalKey] = {
+        name: name,
+        commander: parsed.commander,
+        list: parsed.list,
+        accent: '#3eff7e',
+        colors: [],
+      };
+      saveDecks();
+      toast((isPt?'✓ Deck importado: ':'✓ Deck imported: ')+name+' ('+parsed.list.length+' '+(isPt?'cartas':'cards')+')');
+      renderDeckGrid();
+    }},
+    {label:isPt?'CANCELAR':'CANCEL', cls:'', fn:()=>{}}
+  ]);
+}
+
+function parseDecklist(text){
+  // Aceita formatos:
+  //   1 Card Name
+  //   1x Card Name
+  //   Card Name
+  //   // commander  (marca próxima linha como commander)
+  //   SIDEBOARD (ignora a partir daqui)
+  const lines = text.split('\n').map(l=>l.trim());
+  const list = [];
+  let commander = null;
+  let nextIsCommander = false;
+  let inSideboard = false;
+  for(const raw of lines){
+    if(!raw) continue;
+    // comentários
+    if(/^\/\//.test(raw) || /^#/.test(raw)){
+      if(/commander/i.test(raw)) nextIsCommander = true;
+      continue;
+    }
+    if(/^(sideboard|maybeboard)/i.test(raw)){ inSideboard = true; continue; }
+    if(inSideboard) continue;
+    // linhas tipo "1 Sol Ring", "1x Sol Ring", "Sol Ring"
+    const m = raw.match(/^(\d+)x?\s+(.+?)(?:\s+\([A-Z0-9]{3,5}\)\s*\d*)?$/i);
+    let count = 1, name = raw;
+    if(m){ count = parseInt(m[1]); name = m[2].trim(); }
+    else {
+      // talvez seja só nome sem quantidade
+      name = raw.replace(/\s*\([A-Z0-9]{3,5}\)\s*\d*$/i,'').trim();
+    }
+    if(!name) continue;
+    // se foi marcado como commander, pega o primeiro nome
+    if(nextIsCommander && !commander){
+      commander = name;
+      nextIsCommander = false;
+      // o commander também vai pra lista (vai ser separado no buildPlayerState)
+      for(let i=0;i<count;i++) list.push(name);
+      continue;
+    }
+    for(let i=0;i<count;i++) list.push(name);
+  }
+  if(list.length === 0) return {error:'Decklist vazia'};
+  // se não marcou commander, usa o primeiro nome da lista como fallback
+  if(!commander) commander = list[0];
+  return {list, commander};
+}
+
+function saveDecks(){
+  try{ localStorage.setItem('mtg_user_decks', JSON.stringify(DECKS)); }catch(e){}
+}
+
+function openManageDecksModal(){
+  const isPt = GAME.lang==='pt';
+  const keys = Object.keys(DECKS);
+  if(keys.length === 0){
+    toast(isPt?'Nenhum deck importado':'No decks imported');
+    return;
+  }
+  let html = `<div style="color:var(--text-dim);margin-bottom:10px">${isPt?'Seus decks:':'Your decks:'}</div>`;
+  html += '<div style="display:flex;flex-direction:column;gap:6px;max-height:60vh;overflow-y:auto">';
+  for(const k of keys){
+    const d = DECKS[k];
+    html += `
+      <div style="display:flex;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);background:var(--bg-panel-2)">
+        <div style="flex:1">
+          <div style="font-weight:bold;color:var(--accent)">${escapeHTML(d.name||k)}</div>
+          <div style="font-size:11px;color:var(--text-dim)">${escapeHTML(d.commander||'(sem cmdr)')} — ${(d.list||[]).length} cards</div>
+        </div>
+        <button class="manage-export-btn" data-key="${k}" style="padding:4px 8px;font-size:11px">📋 ${isPt?'COPIAR':'EXPORT'}</button>
+        <button class="manage-delete-btn red" data-key="${k}" style="padding:4px 8px;font-size:11px">🗑 ${isPt?'EXCLUIR':'DELETE'}</button>
+      </div>
+    `;
+  }
+  html += '</div>';
+  confirmModal(isPt?'⚙ GERENCIAR DECKS':'⚙ MANAGE DECKS', html, [{label:isPt?'FECHAR':'CLOSE',cls:'',fn:()=>{}}]);
+  setTimeout(()=>{
+    document.querySelectorAll('.manage-delete-btn').forEach(b=>{
+      b.addEventListener('click',()=>{
+        const k = b.dataset.key;
+        if(confirm((isPt?'Excluir deck "':'Delete deck "')+DECKS[k].name+'"?')){
+          delete DECKS[k];
+          saveDecks();
+          if(selectedDeck===k){selectedDeck=null;updateStartBtn();}
+          renderDeckGrid();
+          document.getElementById('modal').classList.remove('visible');
+          openManageDecksModal();
+        }
+      });
+    });
+    document.querySelectorAll('.manage-export-btn').forEach(b=>{
+      b.addEventListener('click',()=>{
+        const k = b.dataset.key;
+        const d = DECKS[k];
+        const txt = '// '+d.name+'\n// commander\n1 '+d.commander+'\n\n'+(d.list||[]).filter(n=>n!==d.commander).map(n=>'1 '+n).join('\n');
+        navigator.clipboard.writeText(txt).then(()=>{
+          toast(isPt?'✓ Decklist copiada':'✓ Decklist copied');
+        }).catch(()=>{
+          // fallback: mostra textarea
+          prompt(isPt?'Copie a decklist:':'Copy the decklist:', txt);
+        });
+      });
+    });
+  },50);
+}
+
+// Render inicial
+renderDeckGrid();
+
+async function startGame(){
+  if(!selectedDeck) return;
+  document.getElementById('setup-screen').classList.add('hidden');
+  document.getElementById('loading-screen').classList.remove('hidden');
+  document.getElementById('loader-fallback-actions').style.display='none';
+
+  // V.0.11: sem demo mode automático (depende de internet pra Scryfall)
+  GAME.networkStrategy = null;
+  GAME.demoMode = false;
+
+  const playerDeckKey = selectedDeck;
+  // Oponente: mesmo deck ou outro escolhido
+  const aiDeckKey = opponentMode === 'other' && selectedOpponentDeck ? selectedOpponentDeck : selectedDeck;
+
+  logLoad(`${GAME.lang==='pt'?'Você escolheu':'You chose'}: ${DECKS[playerDeckKey].name}`,'ok');
+  logLoad(`${GAME.lang==='pt'?'IA usará':'AI will use'}: ${DECKS[aiDeckKey].name}`,'info');
+  logLoad(`${GAME.lang==='pt'?'Dificuldade IA':'AI Difficulty'}: ${GAME.difficulty.toUpperCase()}`,'info');
+
+  // mostra ações de fallback se loading demorar muito
+  GAME._fallbackTimer = setTimeout(()=>{
+    document.getElementById('loader-fallback-actions').style.display='block';
+  }, 6000);
+
+  try{
+    // se mesmo deck, carrega só uma vez (otimização)
+    let playerCards, aiCards;
+    if(aiDeckKey === playerDeckKey){
+      playerCards = await loadDeck(DECKS[playerDeckKey].list,'Player');
+      // pra IA, faz um deep clone das instâncias (não pode compartilhar)
+      aiCards = await loadDeck(DECKS[aiDeckKey].list,'IA');
+    } else {
+      [playerCards,aiCards] = await Promise.all([
+        loadDeck(DECKS[playerDeckKey].list,'Player'),
+        loadDeck(DECKS[aiDeckKey].list,'IA'),
+      ]);
+    }
+    clearTimeout(GAME._fallbackTimer);
+    GAME.player=buildPlayerState('player', playerDeckKey, playerCards);
+    GAME.ai    =buildPlayerState('ai',     aiDeckKey,     aiCards);
+
+    logLoad('► '+(GAME.lang==='pt'?'Dados carregados. Iniciando...':'Data loaded. Starting...'),'ok');
+    await sleep(600);
+
+    document.getElementById('loading-screen').classList.add('hidden');
+    document.getElementById('game-screen').classList.add('visible');
+    initGame();
+    if(GAME.demoMode){
+      showDemoBanner();
+    }
+  }catch(e){
+    clearTimeout(GAME._fallbackTimer);
+    logLoad('ERRO: '+e.message,'err');
+    document.getElementById('loader-fallback-actions').style.display='block';
+    console.error(e);
+  }
+}
+
+/* Permite forçar modo demo MID-LOADING */
+async function forceStartDemoMode(){
+  document.getElementById('loader-fallback-actions').style.display='none';
+  logLoad(GAME.lang==='pt'?'► Entrando em modo demo...':'► Entering demo mode...','info');
+  GAME.networkStrategy = 'failed';
+  GAME.demoMode = true;
+  // limpa cache antigo pra não atrapalhar
+  setCache({});
+  const playerDeckKey=selectedDeck;
+  const aiDeckKey=selectedDeck==='science'?'mutants':'science';
+  const playerCards = await loadDeck(DECKS[playerDeckKey].list,'Player');
+  const aiCards = await loadDeck(DECKS[aiDeckKey].list,'IA');
+  GAME.player=buildPlayerState('player', playerDeckKey, playerCards);
+  GAME.ai    =buildPlayerState('ai',     aiDeckKey,     aiCards);
+  await sleep(300);
+  document.getElementById('loading-screen').classList.add('hidden');
+  document.getElementById('game-screen').classList.add('visible');
+  initGame();
+  showDemoBanner();
+}
+
+function showDemoBanner(){
+  // banner persistente em cima do game
+  let banner = document.getElementById('demo-banner');
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'demo-banner';
+    banner.style.cssText = 'position:fixed;bottom:48px;left:50%;transform:translateX(-50%);background:rgba(255,176,0,.15);border:1.5px solid var(--amber);color:var(--amber);padding:4px 14px;font-size:11px;letter-spacing:1px;z-index:500;font-family:"Press Start 2P",monospace;cursor:pointer;box-shadow:0 0 12px rgba(255,176,0,.25)';
+    banner.title = GAME.lang==='pt'?'Clique pra fechar':'Click to dismiss';
+    banner.onclick = ()=>banner.remove();
+    document.body.appendChild(banner);
+  }
+  banner.textContent = t('demo_banner');
+}
+
+function showHowToHost(){
+  confirmModal(
+    t('how_to_host_title'),
+    t('how_to_host_body').replace(/\n/g,'<br>'),
+    [{label: GAME.lang==='pt'?'FECHAR':'CLOSE', cls:'', fn:()=>{}}]
+  );
+}
+
+function logLoad(msg,cls=''){
+  const log=document.getElementById('loader-log');
+  const d=document.createElement('div');
+  d.textContent='> '+msg;
+  if(cls)d.className=cls;
+  log.appendChild(d);
+  log.scrollTop=log.scrollHeight;
+}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+
+/* === SCRYFALL LOADER ===
+   Busca cartas em lotes de 75 (limite da API /cards/collection)
+   Cache localStorage pra não rebatizar a cada partida. */
+const SCRYFALL_CACHE_KEY='mtg_scryfall_cache_v2'; // V.0.6 bumped — limpa caches sem imagens
+function getCache(){
+  try{
+    const c = JSON.parse(localStorage.getItem(SCRYFALL_CACHE_KEY)||'{}');
+    // valida: se uma entrada não tem imagem E é uma carta conhecida com imagem,
+    // remove pra forçar refetch
+    return c;
+  }catch(e){return{}}
+}
+function setCache(c){try{localStorage.setItem(SCRYFALL_CACHE_KEY,JSON.stringify(c))}catch(e){}}
+// limpa caches antigos
+try{ localStorage.removeItem('mtg_scryfall_cache_v1'); }catch(e){}
+
+/* === ESTRATÉGIAS DE FETCH ===
+   Tenta em ordem: direto → proxy A → proxy B → falha (modo demo).
+   Necessário porque alguns ambientes (sandboxed iframes, file://) bloqueiam fetch externo. */
+GAME.networkStrategy = null; // 'direct' | 'proxy:X' | 'failed' — define na primeira tentativa
+GAME.demoMode = false;
+
+const CORS_PROXIES = [
+  // proxies públicos que aceitam GET (POST via codificação na URL não funciona em todos)
+  // pra POST usaremos GET equivalente convertendo o body em query/path
+  'https://corsproxy.io/?url=',
+  'https://api.allorigins.win/raw?url=',
+];
+
+/* Faz request à Scryfall com a estratégia salva ou tenta descobrir uma. */
+async function scryfallFetch(url, opts){
+  opts = opts || {};
+  // Se já sabemos que falhou tudo, vai direto pra demo
+  if(GAME.networkStrategy === 'failed') throw new Error('NETWORK_FAILED');
+
+  // 1ª tentativa: direto
+  if(!GAME.networkStrategy || GAME.networkStrategy === 'direct'){
+    try{
+      const res = await fetch(url, opts);
+      if(res.ok){
+        GAME.networkStrategy = 'direct';
+        return res;
+      }
+      // 404 = carta não existe (não problema de rede); propaga
+      if(res.status === 404) return res;
+      // outros statuses → tenta proxy
+    }catch(e){
+      // CORS/network error — tenta proxy
+    }
+  }
+
+  // 2ª tentativa: proxies (apenas pra GET por causa de limitações dos proxies públicos)
+  // Pra POST (cards/collection), vamos converter pra GET (cards/named?fuzzy=)
+  // mas como cards/collection só é POST, vamos pular proxies pra ele e fazer fallback per-card via GET
+  const isPost = opts.method === 'POST';
+  if(!isPost){
+    for(let i=0; i<CORS_PROXIES.length; i++){
+      const proxy = CORS_PROXIES[i];
+      try{
+        const proxiedUrl = proxy + encodeURIComponent(url);
+        const res = await fetch(proxiedUrl);
+        if(res.ok){
+          if(GAME.networkStrategy !== 'proxy:'+i){
+            logLoad(`${GAME.lang==='pt'?'Usando proxy CORS':'Using CORS proxy'} #${i+1}`,'info');
+          }
+          GAME.networkStrategy = 'proxy:'+i;
+          return res;
+        }
+      }catch(e){/* tenta próximo */}
+    }
+  }
+  // Tudo falhou
+  GAME.networkStrategy = 'failed';
+  throw new Error('NETWORK_FAILED');
+}
+
+/* === DADOS DEMO EMBUTIDOS ===
+   Quando não tem rede, gera stubs minimamente jogáveis pras 200 cartas dos 2 decks.
+   Não tem imagens, mas tem nome/tipo/custo/PT plausíveis. */
+function buildDemoCard(name){
+  const basics = {Plains:'W',Island:'U',Swamp:'B',Mountain:'R',Forest:'G'};
+  if(basics[name]){
+    return {
+      name, cmc:0, cost:'', type:`Basic Land — ${name}`,
+      text:`({T}: Add {${basics[name]}}.)`,
+      power:null, toughness:null, colors:[], img:'', img_small:'', keywords:[],
+    };
+  }
+  // Heurísticas simples baseadas no nome pra dar identidade visual
+  const isLand = /\b(Land|Tower|Bridge|Temple|Vault|Catacombs|Fortress|Pools|Marsh|Wilds|Expanse|Reliquary|Outpost|Heights|Ridge|Falls|Lake|Caves|Mire|Hollow|Sanctuary|Necropolis|Cemetery|Grounds|Bog|Basin|HELIOS|C\.A\.M\.P\.|Mariposa|Junktown|Diamond|Middle School)\b/i.test(name);
+  const isArtifact = /\b(Bobblehead|Pip-Boy|Greaves|Boots|Helm|Bauble|Signet|Talisman|Skullclamp|Ring|Stone|Chalice|Vessel|Knuckles|Scope|Fireshrieker|Costume|Med Kit|Vending|Safe|Launcher|Caster|Power Armor|Junk Jet|Pip|Engine)\b/i.test(name);
+  const isCreature = /\b(Robot|Sentry|Bot|Scribe|Guard|Dweller|Synth|Assault|Eradicator|Gannon|Caster|Death|Hound|Lyons|Synths|Paladin|Apprentice|Apprentice|Gutsy|Vertibird|Mothman|Master|Bright|Queen|Wright|Ghoul|Mayor|Scorchbeast|Numen|Bowen|Yao|Brutish|Farmer|Radstag|Horrigan|Deathclaw|Mayor|Bog|Tracker|Megasloth|Nightkin|Trouble|Scavenger|Acolyte|One|Radroach|Bloatfly|Radgull|Power Fist|Snake|Tunnel|Gourmand|Strong|Boomer|Autumn|Maxson|Kellogg|MacCready|Taggerdy|Securitron|Caesar|Lanius|Cook|Cyber|Brotherhood)\b/i.test(name);
+  if(isLand){
+    return {name, cmc:0, cost:'', type:'Land',
+      text:'{T}: Add one mana of any color.',
+      power:null, toughness:null, colors:[], img:'', img_small:'', keywords:[]};
+  }
+  // CMC entre 2-5 aleatório baseado no comprimento do nome (determinístico)
+  const cmc = 2 + (name.length % 4);
+  if(isCreature){
+    const p = 1 + (name.charCodeAt(0) % 5);
+    const tg = 1 + (name.charCodeAt(name.length-1) % 5);
+    return {name, cmc, cost:`{${cmc-1}}{C}`, type:'Creature',
+      text:'(efeito ignorado no modo demo)',
+      power:String(p), toughness:String(tg), colors:[], img:'', img_small:'', keywords:[]};
+  }
+  if(isArtifact){
+    return {name, cmc, cost:`{${cmc}}`, type:'Artifact',
+      text:'(efeito ignorado no modo demo)',
+      power:null, toughness:null, colors:[], img:'', img_small:'', keywords:[]};
+  }
+  return {name, cmc, cost:`{${cmc-1}}{C}`, type:'Sorcery',
+    text:'(efeito ignorado no modo demo)',
+    power:null, toughness:null, colors:[], img:'', img_small:'', keywords:[]};
+}
+
+async function loadDeck(names,who){
+  const cache=getCache();
+  const unique=[...new Set(names)];
+
+  // V.0.11: motor genérico — todas as cartas vêm da Scryfall em runtime via cache
+  const missing=unique.filter(n=>!cache[n.toLowerCase()]);
+  logLoad(`${who}: ${unique.length} ${GAME.lang==='pt'?'cartas únicas':'unique cards'}, ${unique.length-missing.length} ${GAME.lang==='pt'?'em cache':'cached'}`,'info');
+
+  if(missing.length){
+    const batches=[];
+    for(let i=0;i<missing.length;i+=75) batches.push(missing.slice(i,i+75));
+    const stillMissing = [];
+    let networkFailedHard = false;
+
+    for(let bi=0;bi<batches.length;bi++){
+      if(networkFailedHard){
+        // já confirmado que não tem rede — pula direto pra stub demo
+        batches[bi].forEach(n=>stillMissing.push(n));
+        continue;
+      }
+      const b=batches[bi];
+      logLoad(`${who}: ${GAME.lang==='pt'?'buscando lote':'fetching batch'} ${bi+1}/${batches.length} (${b.length} ${GAME.lang==='pt'?'cartas':'cards'})...`);
+      const body={identifiers:b.map(n=>({name:n}))};
+      let data=null;
+      try{
+        const res = await scryfallFetch('https://api.scryfall.com/cards/collection', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+        });
+        if(!res.ok){
+          logLoad(`Scryfall HTTP ${res.status} (${who})`,'err');
+          b.forEach(n=>stillMissing.push(n));
+          continue;
+        }
+        data=await res.json();
+      }catch(e){
+        if(e.message==='NETWORK_FAILED'){
+          logLoad(GAME.lang==='pt'?'⚠ Sem conexão com a Scryfall — usando modo demo':'⚠ No Scryfall connection — using demo mode','err');
+          networkFailedHard = true;
+          b.forEach(n=>stillMissing.push(n));
+          continue;
+        }
+        logLoad(`Erro no lote ${bi+1}: ${e.message}`,'err');
+        b.forEach(n=>stillMissing.push(n));
+        continue;
+      }
+      for(const c of data.data){
+        const cardObj = simplifyCard(c);
+        cache[c.name.toLowerCase()] = cardObj;
+      }
+      if(data.not_found && data.not_found.length){
+        data.not_found.forEach(nf=>stillMissing.push(nf.name));
+      }
+      updateScan((bi+1)/batches.length*0.5 + (who==='IA'?0.5:0));
+      await sleep(120);
+    }
+
+    // === FALLBACK individual via /cards/named (passa por proxy se necessário) ===
+    if(stillMissing.length && !networkFailedHard){
+      logLoad(`${who}: ${stillMissing.length} ${GAME.lang==='pt'?'carta(s) não achadas — tentando fallback':'card(s) not found — trying fallback'}`,'info');
+      for(const n of stillMissing.slice()){
+        const candidates = [n];
+        if(n.includes(' // ')) n.split(' // ').forEach(p=>candidates.push(p.trim()));
+        let found=false;
+        for(const cand of candidates){
+          try{
+            const res = await scryfallFetch('https://api.scryfall.com/cards/named?fuzzy='+encodeURIComponent(cand));
+            if(res.ok){
+              const c=await res.json();
+              if(c.object==='card'){
+                const obj=simplifyCard(c);
+                cache[n.toLowerCase()]=obj;
+                cache[c.name.toLowerCase()]=obj;
+                found=true;
+                break;
+              }
+            }
+            await sleep(120);
+          }catch(e){
+            if(e.message==='NETWORK_FAILED'){networkFailedHard=true; break}
+          }
+        }
+        if(!found){
+          // remove de stillMissing pra ir pro demo stub abaixo
+        } else {
+          // remove o nome de stillMissing
+          const idx=stillMissing.indexOf(n);
+          if(idx>=0) stillMissing.splice(idx,1);
+        }
+        if(networkFailedHard) break;
+      }
+    }
+
+    // === ÚLTIMO RECURSO: gera stubs DEMO pras cartas restantes ===
+    if(stillMissing.length){
+      if(networkFailedHard){
+        // ativa modo demo global pro próximo deck também
+        GAME.demoMode = true;
+        logLoad(`${who}: ${GAME.lang==='pt'?'gerando cartas demo (sem imagens)':'generating demo cards (no images)'}`,'info');
+      } else {
+        logLoad(`${who}: ${stillMissing.length} ${GAME.lang==='pt'?'cartas não achadas — usando stubs':'cards not found — using stubs'}`,'err');
+      }
+      for(const n of stillMissing){
+        cache[n.toLowerCase()] = buildDemoCard(n);
+      }
+    }
+    setCache(cache);
+  }
+
+  updateScan(who==='IA'?1:0.5);
+  return names.map((n,idx)=>{
+    const c=cache[n.toLowerCase()];
+    if(!c){
+      return makeCardInstance(buildDemoCard(n), who.toLowerCase()+'_'+idx);
+    }
+    return makeCardInstance(c, who.toLowerCase()+'_'+idx);
+  });
+}
+
+/* Stub mínimo (usado por refetchCardImage e fallbacks gerais) */
+function stubCard(name){
+  return buildDemoCard(name);
+}
+
+function updateScan(p){
+  document.getElementById('scan-fill').style.width=Math.round(p*100)+'%';
+}
+
+function simplifyCard(c){
+  const hasOwnImg = c.image_uris && (c.image_uris.normal || c.image_uris.large || c.image_uris.small);
+  const face0 = c.card_faces && c.card_faces[0] ? c.card_faces[0] : null;
+  const face = (face0 && !hasOwnImg) ? face0 : c;
+  // procura imagem em qualquer lugar disponível
+  const imgNormal = c.image_uris?.normal
+                 || c.image_uris?.large
+                 || face0?.image_uris?.normal
+                 || face0?.image_uris?.large
+                 || c.image_uris?.small
+                 || face0?.image_uris?.small
+                 || '';
+  const imgSmall = c.image_uris?.small
+                || face0?.image_uris?.small
+                || c.image_uris?.normal
+                || face0?.image_uris?.normal
+                || '';
+  return {
+    name: c.name,
+    cmc: c.cmc ?? 0,
+    cost: face.mana_cost || c.mana_cost || '',
+    type: face.type_line || c.type_line || '',
+    text: face.oracle_text || c.oracle_text || '',
+    power: face.power || c.power || null,
+    toughness: face.toughness || c.toughness || null,
+    colors: c.color_identity || [],
+    img: imgNormal,
+    img_small: imgSmall,
+    keywords: c.keywords || [],
+  };
+}
+
+function makeCardInstance(data,instId){
+  GAME.cardCounter++;
+  return {
+    id:'c'+GAME.cardCounter,
+    data:data,
+    tapped:false,
+    sickness:false,
+    counters:{},
+    attachedTo:null,
+  };
+}
+
+/* === REFETCH DA IMAGEM SE FALHOU === */
+// chamado quando a img da Scryfall não renderizar (cache antigo, link expirado, etc)
+async function refetchCardImage(card){
+  // Não tenta refetch em modo demo / rede falhou — não tem como funcionar
+  if(GAME.demoMode || GAME.networkStrategy === 'failed') return;
+  try{
+    const cache = getCache();
+    delete cache[card.data.name.toLowerCase()];
+    const url = 'https://api.scryfall.com/cards/named?exact=' + encodeURIComponent(card.data.name);
+    let res;
+    try{ res = await scryfallFetch(url); }catch(e){ return; }
+    if(!res.ok){
+      try{
+        const fuzz = await scryfallFetch('https://api.scryfall.com/cards/named?fuzzy=' + encodeURIComponent(card.data.name));
+        if(!fuzz.ok) return;
+        const json2 = await fuzz.json();
+        if(json2.object==='card'){
+          const fresh = simplifyCard(json2);
+          if(fresh.img){
+            card.data.img = fresh.img;
+            card.data.img_small = fresh.img_small;
+            cache[card.data.name.toLowerCase()] = fresh;
+            setCache(cache);
+            renderAll();
+          }
+        }
+      }catch(e){/* silencioso */}
+      return;
+    }
+    const json = await res.json();
+    if(json.object==='card'){
+      const fresh = simplifyCard(json);
+      if(fresh.img){
+        card.data.img = fresh.img;
+        card.data.img_small = fresh.img_small;
+        cache[card.data.name.toLowerCase()] = fresh;
+        setCache(cache);
+        renderAll();
+      }
+    }
+  }catch(e){/* silencioso */}
+}
+
+/* === ESTADO DO PLAYER === */
+function buildPlayerState(who, deckKey, allCards){
+  // separa commander
+  const cmdrName=DECKS[deckKey].commander;
+  const cmdrIdx=allCards.findIndex(c=>c.data.name===cmdrName);
+  let commander=null;
+  if(cmdrIdx>=0){commander=allCards.splice(cmdrIdx,1)[0]}
+  // embaralha o resto
+  shuffle(allCards);
+  // saca 7
+  const hand=allCards.splice(0,7);
+  return {
+    who, deckKey,
+    library:allCards,
+    hand,
+    battlefield:[],
+    lands:[],
+    graveyard:[],
+    exile:[],
+    commandZone: commander? [commander]:[],
+    life:40,
+    cmdrCast:0,
+    cmdrDmgTo:{},
+    cmdrDmgFrom:0,
+    counters:{rad:0, energy:0, experience:0}, // contadores do jogador
+  };
+}
+
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+}
+
+/* === RENDERIZAÇÃO === */
+function initGame(){
+  document.getElementById('player-deck-count').textContent=GAME.player.library.length;
+  document.getElementById('ai-deck-count').textContent=GAME.ai.library.length;
+  document.getElementById('ai-hand-count').textContent=GAME.ai.hand.length;
+  renderAll();
+  log(t('game_started'),'system');
+  log(t('starting_hand'),'system');
+  setPhase('main');
+  enableMainPhaseButtons();
+}
+
+function renderAll(){
+  renderHand();
+  renderZone('player-lands', GAME.player.lands, false);
+  renderZone('player-battlefield', GAME.player.battlefield, false);
+  renderZone('ai-lands', GAME.ai.lands, true);
+  renderZone('ai-battlefield', GAME.ai.battlefield, true);
+  renderCommanderDisplay();
+  updateStats();
+}
+
+function renderCommanderDisplay(){
+  const p = GAME.player;
+  if(!p) return;
+  const cmdrName = DECKS[p.deckKey].commander;
+  const inZone = p.commandZone[0];
+  const inPlay = p.battlefield.find(c=>c.data.name === cmdrName);
+  const inGrave = p.graveyard.find(c=>c.data.name === cmdrName);
+  const inExile = p.exile.find(c=>c.data.name === cmdrName);
+  const cmdr = inZone || inPlay || inGrave || inExile;
+  if(!cmdr) return;
+
+  const isPt = GAME.lang==='pt';
+  const tax = p.cmdrCast * 2;
+  const totalCost = (cmdr.data.cmc||0) + tax;
+
+  const statusEl = document.getElementById('cmdr-zone-status');
+  let status = ''; let statusClass = '';
+  if(inZone){ status = isPt?'⊕ ZONA DE COMANDO':'⊕ COMMAND ZONE'; }
+  else if(inPlay){ status = (isPt?'✓ EM JOGO':'✓ IN PLAY')+(inPlay.tapped?' · TAPPED':''); statusClass='in-play'; }
+  else if(inGrave){ status = isPt?'⚰ NO CEMITÉRIO':'⚰ GRAVEYARD'; }
+  else if(inExile){ status = isPt?'⛓ EXILADO':'⛓ EXILED'; }
+  statusEl.textContent = status;
+  statusEl.className = 'cmdr-status '+statusClass;
+
+  const area = document.getElementById('cmdr-card-area');
+  const canCast = !!inZone && canPayCommanderCost(cmdr, tax) &&
+                  (GAME.phase==='main'||GAME.phase==='main2') &&
+                  GAME.activePlayer==='player';
+
+  let wrapClass = 'cmdr-card-wrap';
+  if(inPlay) wrapClass += ' in-play';
+  if(inGrave) wrapClass += ' in-grave';
+
+  const imgHTML = cmdr.data.img
+    ? `<img src="${cmdr.data.img}" alt="${cmdr.data.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+       <div class="cmdr-fallback" style="display:none">${cmdr.data.name}</div>`
+    : `<div class="cmdr-fallback" style="display:flex">${cmdr.data.name}</div>`;
+
+  let btnLabel;
+  if(inZone){
+    if(canCast) btnLabel = '► '+(isPt?'CONJURAR':'CAST')+(tax>0?` (${totalCost})`:'');
+    else if(GAME.activePlayer!=='player') btnLabel = isPt?'AGUARDAR SEU TURNO':'WAIT YOUR TURN';
+    else if(GAME.phase!=='main' && GAME.phase!=='main2') btnLabel = isPt?'SÓ EM MAIN PHASE':'ONLY IN MAIN PHASE';
+    else btnLabel = isPt?'⚠ MANA INSUFICIENTE':'⚠ NOT ENOUGH MANA';
+  } else if(inPlay){ btnLabel = isPt?'EM JOGO':'IN PLAY'; }
+  else if(inGrave){ btnLabel = isPt?'NO CEMITÉRIO':'IN GRAVEYARD'; }
+  else { btnLabel = isPt?'EXILADO':'EXILED'; }
+
+  area.innerHTML = `
+    <div class="${wrapClass}" id="cmdr-card-wrap">${imgHTML}</div>
+    <div class="cmdr-cost-row">
+      <span class="cost-label">${isPt?'CUSTO':'COST'}:</span>
+      <span>${renderManaCost(cmdr.data.cost||'')}</span>
+    </div>
+    ${inZone && tax>0 ? `<div class="cmdr-tax-info ${tax>=6?'high':''}">⚠ ${isPt?'TAXA':'TAX'}: +${tax} ${isPt?'genérico':'generic'} (${isPt?'total CMC':'total CMC'} ${totalCost})</div>` : ''}
+    <button id="btn-cast-cmdr-big" class="${canCast?'can-cast':''}" ${!inZone||!canCast?'disabled':''}>
+      ${btnLabel}
+    </button>
+  `;
+
+  // wire click handlers (não dá pra passar via onclick por causa de escopo do cmdr)
+  const wrap = document.getElementById('cmdr-card-wrap');
+  if(wrap){
+    wrap.addEventListener('click',()=>{
+      // abre inspector da carta atual (zone ou em jogo)
+      if(inPlay) openInspector(cmdr.data, inPlay, 'player');
+      else openInspector(cmdr.data);
+    });
+  }
+  const btnCast = document.getElementById('btn-cast-cmdr-big');
+  if(btnCast && !btnCast.disabled){
+    btnCast.addEventListener('click', castCommander);
+  }
+}
+
+function canPayCommanderCost(cmdr, tax){
+  const poolCopy = {...GAME.manaPool};
+  if(!canPayCost(cmdr.data.cost, poolCopy)) return false;
+  payCost(cmdr.data.cost, poolCopy);
+  return totalMana(poolCopy) >= tax;
+}
+
+function updateStats(){
+  document.getElementById('player-life').textContent=GAME.player.life;
+  document.getElementById('ai-life').textContent=GAME.ai.life;
+  document.getElementById('player-cmdr-dmg').textContent=GAME.player.cmdrDmgFrom;
+  document.getElementById('ai-cmdr-dmg').textContent=GAME.ai.cmdrDmgFrom;
+  document.getElementById('player-deck-count').textContent=GAME.player.library.length;
+  document.getElementById('ai-deck-count').textContent=GAME.ai.library.length;
+  document.getElementById('ai-hand-count').textContent=GAME.ai.hand.length;
+  // contadores do jogador
+  ['player','ai'].forEach(p=>{
+    const pl=GAME[p];if(!pl)return;
+    const rad=pl.counters?.rad||0;
+    const en=pl.counters?.energy||0;
+    document.getElementById(p+'-rad-num').textContent=rad;
+    document.getElementById(p+'-energy-num').textContent=en;
+    document.getElementById(p+'-rad').classList.toggle('zero', rad===0);
+    document.getElementById(p+'-energy').classList.toggle('zero', en===0);
+  });
+  renderManaPool();
+}
+
+function renderManaPool(){
+  const pool=document.getElementById('mana-pool');
+  pool.innerHTML='';
+  const hasAny = ['W','U','B','R','G','C'].some(c=>GAME.manaPool[c]>0);
+  if(!hasAny){
+    pool.innerHTML='<span style="color:var(--text-dim);font-size:12px;letter-spacing:1px">'+(GAME.lang==='pt'?'(sem mana)':'(no mana)')+'</span>';
+    return;
+  }
+  ['W','U','B','R','G','C'].forEach(c=>{
+    const n=GAME.manaPool[c];
+    if(n>0) pool.insertAdjacentHTML('beforeend', manaSymbolHTML(c, n));
+  });
+}
+
+function renderHand(){
+  const hand=document.getElementById('hand-area');
+  hand.innerHTML='';
+  GAME.player.hand.forEach(card=>{
+    const el=makeCardEl(card,false);
+    el.setAttribute('draggable','true');
+    el.addEventListener('dragstart',e=>{
+      e.dataTransfer.setData('text/plain',card.id);
+      el.classList.add('dragging');
+    });
+    el.addEventListener('dragend',()=>el.classList.remove('dragging'));
+    el.addEventListener('click',()=>openInspector(card.data));
+    hand.appendChild(el);
+  });
+}
+
+function renderZone(zoneName, cards, faceDownIfAI){
+  const el=document.querySelector(`[data-zone="${zoneName}"]`);
+  el.innerHTML='';
+  cards.forEach(card=>{
+    const ce=makeCardEl(card, false); // AI cards still face up no battlefield (oponente vê)
+    if(card.tapped) ce.classList.add('tapped');
+    if(card.sickness) ce.classList.add('summoning-sick');
+    if(GAME.attackers.includes(card.id)) ce.classList.add('attacker');
+    if(Object.values(GAME.blockers).includes(card.id)) ce.classList.add('blocker');
+    ce.addEventListener('click',()=>onBattlefieldClick(card, zoneName));
+    el.appendChild(ce);
+  });
+}
+
+function makeCardEl(card, faceDown){
+  const el=document.createElement('div');
+  el.className='card';
+  el.dataset.id=card.id;
+  if(faceDown){el.classList.add('face-down');return el}
+  // V.0.10: STRICT MODE — só carrega arte do set Fallout (pip).
+  //   1. pip normal → 2. pip small → 3. texto fallback
+  //   Cartas sem versão no set pip ficam com texto.
+  if(card.data.img || card.data.img_small){
+    const img=document.createElement('img');
+    img.className='card-img';
+    img.alt=card.data.name;
+    let triedSmall=false;
+    img.onerror=()=>{
+      if(!triedSmall && card.data.img_small && card.data.img_small !== card.data.img){
+        triedSmall=true;
+        img.src=card.data.img_small;
+      } else {
+        // sem versão Fallout disponível — fica com texto
+        img.remove();
+        el.appendChild(makeCardTextEl(card));
+      }
+    };
+    img.src = card.data.img || card.data.img_small;
+    el.appendChild(img);
+  }else{
+    el.appendChild(makeCardTextEl(card));
+  }
+  // contadores (badges)
+  if(card.counters && Object.keys(card.counters).length){
+    const ctEl=document.createElement('div');
+    ctEl.className='card-counters';
+    for(const [k,v] of Object.entries(card.counters)){
+      if(!v) continue;
+      const badge=document.createElement('div');
+      const cls = counterTypeClass(k);
+      badge.className='counter-badge '+cls;
+      badge.innerHTML=`<span class="icon">${counterIcon(k)}</span>${v>0?'+':''}${v}`;
+      ctEl.appendChild(badge);
+    }
+    el.appendChild(ctEl);
+  }
+  // P/T modificado por +1/+1 ou -1/-1
+  if(isCreature(card.data) && card.data.power!=null){
+    const basePow=parseInt(card.data.power)||0;
+    const baseTou=parseInt(card.data.toughness)||0;
+    const plus=(card.counters?.['+1/+1']||0);
+    const minus=(card.counters?.['-1/-1']||0);
+    const dmg=card.damage||0;
+    if(plus||minus||dmg){
+      const overlay=document.createElement('div');
+      overlay.className='pt-overlay';
+      const p=basePow+plus-minus;
+      const t=baseTou+plus-minus-dmg;
+      if(dmg>0) overlay.classList.add('damaged');
+      overlay.textContent=`${p}/${t}`;
+      el.appendChild(overlay);
+    }
+  }
+  return el;
+}
+function counterTypeClass(name){
+  const n=name.toLowerCase();
+  if(n==='+1/+1') return 'plus';
+  if(n==='-1/-1') return 'minus';
+  if(n==='loyalty') return 'loyalty';
+  if(n==='charge') return 'charge';
+  if(n==='quest') return 'quest';
+  if(n==='rad') return 'rad';
+  return '';
+}
+function counterIcon(name){
+  const n=name.toLowerCase();
+  if(n==='+1/+1') return '➕';
+  if(n==='-1/-1') return '➖';
+  if(n==='loyalty') return '★';
+  if(n==='charge') return '⚡';
+  if(n==='quest') return '🎯';
+  if(n==='rad') return '☢';
+  if(n==='energy') return '⚡';
+  return '◉';
+}
+function makeCardTextEl(card){
+  const t=document.createElement('div');
+  t.className='card-text';
+  const top=document.createElement('div');
+  top.innerHTML=`<div class="ct-name">${card.data.name}</div>`+
+                `<span class="ct-cost">${renderManaCost(card.data.cost||'')}</span>`;
+  const mid=document.createElement('div');
+  mid.className='ct-type';
+  mid.textContent=card.data.type;
+  const bot=document.createElement('div');
+  if(card.data.power!=null){
+    bot.innerHTML=`<span class="ct-pt">${card.data.power}/${card.data.toughness}</span>`;
+  }
+  t.appendChild(top);t.appendChild(mid);t.appendChild(bot);
+  return t;
+}
+
+/* === INSPECTOR === */
+function openInspector(data, cardObj, owner){
+  GAME.currentInspectorCard = data;
+  GAME.currentInspectorCardObj = cardObj || null;
+  GAME.currentInspectorOwner = owner || null;
+  document.getElementById('ii-img').src=data.img||'';
+  document.getElementById('ii-img').onerror=function(){this.style.display='none'};
+  document.getElementById('ii-img').style.display='block';
+  document.getElementById('ii-name').textContent=data.name;
+  document.getElementById('ii-cost').innerHTML=renderManaCost(data.cost||'');
+  document.getElementById('ii-type').textContent=data.type;
+  const text = GAME.lang==='pt' && data.text_pt ? data.text_pt : (data.text||'(sem texto)');
+  document.getElementById('ii-text').textContent=text;
+  document.getElementById('ii-pt').textContent=data.power!=null?`${data.power}/${data.toughness}`:'';
+  document.getElementById('ii-explain-area').style.display='none';
+  document.getElementById('ii-explain-text').textContent='';
+  // Ações: só pra cartas que estão NO JOGO (objeto + owner especificados)
+  const actEl=document.getElementById('ii-actions');
+  if(cardObj && owner){
+    actEl.style.display='block';
+    // contextualiza botão de tap
+    const tapBtn=document.getElementById('ii-act-tap');
+    tapBtn.textContent = cardObj.tapped ? '↺ UNTAP' : '↻ TAP';
+  } else {
+    actEl.style.display='none';
+  }
+  document.getElementById('inspector').classList.add('visible');
+}
+function closeInspector(){document.getElementById('inspector').classList.remove('visible')}
+document.getElementById('inspector').addEventListener('click',e=>{
+  if(e.target.id==='inspector')closeInspector();
+});
+
+/* === EXPLICAR CARTA === */
+function explainCardLocal(data, lang){
+  // Gera explicação baseada em parsing local do texto/tipo da carta
+  const isPt = lang==='pt';
+  const lines = [];
+
+  // Tipo
+  const types = (data.type||'').toLowerCase();
+  if(types.includes('basic land')){
+    const colorMap={Plains:'W',Island:'U',Swamp:'B',Mountain:'R',Forest:'G'};
+    const cor = Object.keys(colorMap).find(k=>data.name.includes(k));
+    const corNome = isPt?
+      {W:'branca',U:'azul',B:'preta',R:'vermelha',G:'verde'}[colorMap[cor]||'C']:
+      {W:'white',U:'blue',B:'black',R:'red',G:'green'}[colorMap[cor]||'C'];
+    lines.push(isPt?
+      `🏞️ Terreno básico. Tappe (vire 90°) pra produzir 1 mana ${corNome}.`:
+      `🏞️ Basic land. Tap to produce 1 ${corNome} mana.`);
+  } else if(types.includes('land')){
+    lines.push(isPt?
+      `🏞️ Terreno não-básico. Verifique o texto para condições especiais.`:
+      `🏞️ Nonbasic land. Check text for special conditions.`);
+  } else if(types.includes('creature')){
+    lines.push(isPt?
+      `🛡️ Criatura ${data.power}/${data.toughness} (poder/resistência). Pode atacar/bloquear a partir do próximo turno (mal de invocação).`:
+      `🛡️ Creature ${data.power}/${data.toughness}. Can attack/block from next turn (summoning sickness).`);
+  } else if(types.includes('instant')){
+    lines.push(isPt?
+      `⚡ Mágica instantânea. Pode ser conjurada a qualquer momento, inclusive no turno do oponente.`:
+      `⚡ Instant. Can be cast at any time, including opponent's turn.`);
+  } else if(types.includes('sorcery')){
+    lines.push(isPt?
+      `📜 Feitiço. Só pode ser conjurado em sua main phase, quando a pilha está vazia.`:
+      `📜 Sorcery. Only castable in your main phase with empty stack.`);
+  } else if(types.includes('artifact')){
+    lines.push(isPt?
+      `⚙️ Artefato. Permanência que fica no campo de batalha.`:
+      `⚙️ Artifact. Permanent that stays on the battlefield.`);
+  } else if(types.includes('enchantment')){
+    lines.push(isPt?
+      `✨ Encantamento. Permanência que fica no campo com efeito contínuo.`:
+      `✨ Enchantment. Permanent with ongoing effect.`);
+  } else if(types.includes('planeswalker')){
+    lines.push(isPt?
+      `🌀 Planeswalker. Aliado que entra com contadores de lealdade e tem habilidades ativáveis.`:
+      `🌀 Planeswalker. Ally with loyalty counters and activatable abilities.`);
+  }
+
+  // Custo
+  if(data.cost){
+    lines.push(isPt?
+      `💰 Custo: ${data.cost.replace(/[{}]/g,' ').trim()} (CMC ${data.cmc||0}).`:
+      `💰 Cost: ${data.cost.replace(/[{}]/g,' ').trim()} (CMC ${data.cmc||0}).`);
+  }
+
+  // Keywords comuns
+  const text = (data.text||'').toLowerCase();
+  const keywordExplain = {
+    flying: isPt?'• Voar: só pode ser bloqueada por criaturas com voar ou alcance.':'• Flying: can only be blocked by creatures with flying or reach.',
+    trample: isPt?'• Atropelar: dano excedente em bloqueadores vai pro jogador.':'• Trample: excess damage carries over to the player.',
+    haste: isPt?'• Ímpeto: pode atacar/tappar no turno em que entra (sem mal de invocação).':'• Haste: can attack/tap the turn it enters.',
+    vigilance: isPt?'• Vigilância: não tappa ao atacar.':'• Vigilance: doesn\'t tap to attack.',
+    lifelink: isPt?'• Vínculo com a vida: dano causado vira ganho de vida.':'• Lifelink: damage dealt becomes life gain.',
+    deathtouch: isPt?'• Toque mortífero: qualquer dano causado destrói a criatura.':'• Deathtouch: any damage dealt destroys creatures.',
+    hexproof: isPt?'• Hexproof: não pode ser alvo de magias/habilidades do oponente.':'• Hexproof: can\'t be targeted by opponent.',
+    indestructible: isPt?'• Indestrutível: dano não destrói; só efeitos de "exilar" ou "sacrificar" funcionam.':'• Indestructible: damage doesn\'t destroy.',
+    'first strike': isPt?'• Iniciativa: causa dano antes de criaturas sem iniciativa.':'• First strike: deals damage before regular damage step.',
+    'double strike': isPt?'• Iniciativa dupla: causa dano na iniciativa E no dano normal.':'• Double strike: deals damage at both first strike and normal damage steps.',
+    menace: isPt?'• Ameaça: só pode ser bloqueada por 2+ criaturas.':'• Menace: must be blocked by 2+ creatures.',
+    reach: isPt?'• Alcance: pode bloquear criaturas com voar.':'• Reach: can block fliers.',
+    flash: isPt?'• Lampejo: pode ser conjurada como instantânea.':'• Flash: can be cast as an instant.',
+  };
+  const found = [];
+  for(const kw in keywordExplain){
+    if(text.includes(kw)) found.push(keywordExplain[kw]);
+  }
+  if(found.length){
+    lines.push((isPt?'\n📖 Palavras-chave:\n':'\n📖 Keywords:\n')+found.join('\n'));
+  }
+
+  // Detecta padrões comuns no texto
+  const patterns = [];
+  if(/deal[s]? \d+ damage/.test(text)){
+    const m=text.match(/deal[s]? (\d+) damage/);
+    if(m) patterns.push(isPt?`💥 Causa ${m[1]} de dano (verifique o alvo no texto).`:`💥 Deals ${m[1]} damage (check target in text).`);
+  }
+  if(/draw \w+ cards?/.test(text)){
+    patterns.push(isPt?'📚 Faz você comprar carta(s).':'📚 Lets you draw card(s).');
+  }
+  if(/destroy target/.test(text)){
+    patterns.push(isPt?'💀 Destrói uma permanência alvo.':'💀 Destroys a target permanent.');
+  }
+  if(/counter target/.test(text)){
+    patterns.push(isPt?'🛑 Anula uma magia alvo (volta pra cemitério sem efeito).':'🛑 Counters a target spell.');
+  }
+  if(/gain \d+ life/.test(text)){
+    const m=text.match(/gain (\d+) life/);
+    if(m) patterns.push(isPt?`❤️ Você ganha ${m[1]} de vida.`:`❤️ You gain ${m[1]} life.`);
+  }
+  if(/exile target/.test(text)){
+    patterns.push(isPt?'⛓️ Exila (remove do jogo permanentemente) o alvo.':'⛓️ Exiles target.');
+  }
+  if(/\+1\/\+1 counter/.test(text)){
+    patterns.push(isPt?'🔼 Envolve contadores +1/+1 (aumentam poder e resistência).':'🔼 Uses +1/+1 counters.');
+  }
+  if(/rad counter/.test(text)){
+    patterns.push(isPt?'☢️ Contadores de radiação no jogador. Veja regras oficiais da carta.':'☢️ Rad counters on player. See official card rules.');
+  }
+  if(/junk token/.test(text)){
+    patterns.push(isPt?'🗑️ Cria token Junk. Veja regras oficiais da carta.':'🗑️ Creates Junk token. See official card rules.');
+  }
+  if(/quest counter/.test(text)){
+    patterns.push(isPt?'🎯 Usa contadores de missão. Veja regras oficiais da carta.':'🎯 Uses quest counters. See official card rules.');
+  }
+  if(/energy counter|{e}/.test(text)){
+    patterns.push(isPt?'⚡ Contadores de energia: ficam no jogador, gastos como custo.':'⚡ Energy counters: kept on player, spent as cost.');
+  }
+  if(/proliferate/.test(text)){
+    patterns.push(isPt?'🧬 Proliferar: escolha permanentes/jogadores com contadores e adicione +1 a cada tipo.':'🧬 Proliferate: choose permanents/players with counters, add one of each kind.');
+  }
+  if(/investigate/.test(text)){
+    patterns.push(isPt?'🔍 Investigar: cria um Clue (artefato {2},sacrifice: compre uma carta).':'🔍 Investigate: create a Clue (artifact {2},sacrifice: draw a card).');
+  }
+  if(/treasure token/.test(text)){
+    patterns.push(isPt?'💰 Treasure token: artefato {T},sacrifique: adicione uma mana de qualquer cor.':'💰 Treasure token: artifact {T},sacrifice: add one mana of any color.');
+  }
+  if(/food token/.test(text)){
+    patterns.push(isPt?'🍎 Food token: artefato {2},{T},sacrifique: ganhe 3 vidas.':'🍎 Food token: artifact {2},{T},sacrifice: gain 3 life.');
+  }
+
+  if(patterns.length){
+    lines.push((isPt?'\n🔍 Efeitos detectados:\n':'\n🔍 Effects detected:\n')+patterns.join('\n'));
+  }
+
+  if(!lines.length){
+    lines.push(isPt?'Carta sem informação adicional. Use o botão "APROFUNDAR" para análise detalhada via IA.':'No additional info. Use "DEEPEN" button for AI analysis.');
+  }
+
+  return lines.join('\n');
+}
+
+async function explainCardWithClaudeAPI(data, lang){
+  if(!GAME.apiKey){
+    throw new Error(t('api_key_missing'));
+  }
+  const prompt = lang==='pt'?
+    `Você é um especialista em Magic: The Gathering. Explique de forma didática e curta (máx 6 linhas) o que faz a carta "${data.name}" para um jogador iniciante.
+
+Tipo: ${data.type}
+Custo de mana: ${data.cost||'(nenhum)'}
+${data.power!=null?`Poder/Resistência: ${data.power}/${data.toughness}`:''}
+Texto da carta:
+${data.text||'(sem texto)'}
+
+Explique: (1) o que ela faz em termos simples, (2) quando você jogaria ela, (3) sinergias óbvias do baralho Fallout Commander se aplicável (rad counters, junk tokens, energy counters, artefatos, mutações). Responda em PORTUGUÊS BRASILEIRO. Seja direto, sem introdução, sem repetir o nome da carta.`
+    :
+    `You are a Magic: The Gathering expert. Briefly explain (max 6 lines) what the card "${data.name}" does for a beginner.
+
+Type: ${data.type}
+Mana cost: ${data.cost||'(none)'}
+${data.power!=null?`P/T: ${data.power}/${data.toughness}`:''}
+Card text:
+${data.text||'(no text)'}
+
+Explain: (1) what it does in simple terms, (2) when to play it, (3) obvious Fallout Commander synergies if applicable. Be direct, no intro, no name repetition.`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key': GAME.apiKey,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:600,
+      messages:[{role:'user',content:prompt}]
+    })
+  });
+  if(!res.ok){
+    const errTxt = await res.text();
+    throw new Error('HTTP '+res.status+': '+errTxt.slice(0,200));
+  }
+  const json = await res.json();
+  const txt = (json.content||[])
+    .filter(c=>c.type==='text')
+    .map(c=>c.text)
+    .join('\n');
+  return txt || (lang==='pt'?'(sem resposta)':'(empty response)');
+}
+
+// Wire dos botões
+document.getElementById('ii-explain-btn').addEventListener('click',()=>{
+  const data = GAME.currentInspectorCard;
+  if(!data) return;
+  const exp = explainCardLocal(data, GAME.lang);
+  document.getElementById('ii-explain-text').textContent = exp;
+  document.getElementById('ii-explain-area').style.display = 'block';
+});
+
+document.getElementById('ii-deepen').addEventListener('click',async ()=>{
+  const data = GAME.currentInspectorCard;
+  if(!data) return;
+  const btn = document.getElementById('ii-deepen');
+  const txtEl = document.getElementById('ii-explain-text');
+  btn.disabled = true;
+  txtEl.textContent = t('deepening');
+  try{
+    const deeper = await explainCardWithClaudeAPI(data, GAME.lang);
+    txtEl.textContent = deeper;
+  }catch(e){
+    txtEl.textContent = t('api_error',{msg:e.message});
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+// === AÇÕES NA CARTA (dentro do inspector) ===
+function _inspectedCard(){
+  const c = GAME.currentInspectorCardObj;
+  const o = GAME.currentInspectorOwner;
+  if(!c||!o){toast(GAME.lang==='pt'?'Esta carta não está no campo':'Card not in play');return null}
+  return {c, o, ownerObj: GAME[o]};
+}
+function cardAction_tap(){
+  const ctx=_inspectedCard();if(!ctx)return;
+  ctx.c.tapped = !ctx.c.tapped;
+  log((ctx.c.tapped?'↻ ':'↺ ')+ctx.c.data.name,'player');
+  renderAll();
+  // atualiza label do botão sem fechar inspector
+  document.getElementById('ii-act-tap').textContent = ctx.c.tapped?'↺ UNTAP':'↻ TAP';
+}
+function cardAction_destroy(){
+  const ctx=_inspectedCard();if(!ctx)return;
+  closeInspector();
+  killCard(ctx.c, ctx.ownerObj);
+  renderAll();
+}
+function cardAction_exile(){
+  const ctx=_inspectedCard();if(!ctx)return;
+  closeInspector();
+  // remove de qualquer zona do owner
+  ['battlefield','lands','hand','graveyard'].forEach(z=>{
+    ctx.ownerObj[z] = ctx.ownerObj[z].filter(x=>x.id!==ctx.c.id);
+  });
+  ctx.ownerObj.exile.push(ctx.c);
+  log(`⛓️ ${ctx.c.data.name} → exile`,'system');
+  renderAll();
+}
+function cardAction_return_hand(){
+  const ctx=_inspectedCard();if(!ctx)return;
+  closeInspector();
+  ['battlefield','lands','graveyard','exile'].forEach(z=>{
+    ctx.ownerObj[z] = ctx.ownerObj[z].filter(x=>x.id!==ctx.c.id);
+  });
+  ctx.c.tapped=false;ctx.c.sickness=false;ctx.c.counters={};ctx.c.damage=0;
+  ctx.ownerObj.hand.push(ctx.c);
+  log(`↩ ${ctx.c.data.name} → ${ctx.o==='player'?(GAME.lang==='pt'?'sua mão':'your hand'):(GAME.lang==='pt'?'mão da IA':'AI hand')}`,'system');
+  renderAll();
+}
+function cardAction_top_library(){
+  const ctx=_inspectedCard();if(!ctx)return;
+  closeInspector();
+  ['battlefield','lands','hand','graveyard','exile'].forEach(z=>{
+    ctx.ownerObj[z] = ctx.ownerObj[z].filter(x=>x.id!==ctx.c.id);
+  });
+  ctx.c.tapped=false;ctx.c.sickness=false;ctx.c.counters={};ctx.c.damage=0;
+  ctx.ownerObj.library.unshift(ctx.c);
+  log(`📚 ${ctx.c.data.name} → ${GAME.lang==='pt'?'topo do deck':'top of library'}`,'system');
+  renderAll();
+}
+function cardAction_counters(){
+  const ctx=_inspectedCard();if(!ctx)return;
+  openCardCounterModal(ctx.c);
+}
+
+// === MODAL DE CONTADORES DA CARTA ===
+function openCardCounterModal(card){
+  if(!card.counters) card.counters={};
+  const isPt = GAME.lang==='pt';
+  const commonTypes = ['+1/+1','-1/-1','charge','loyalty','quest','time','stun'];
+  // monta lista atual + tipos comuns sem contador zero
+  const present = Object.keys(card.counters).filter(k=>card.counters[k]!==0);
+  const tag = (l)=>`<span class="counter-badge ${counterTypeClass(l)}" style="margin-right:4px">${counterIcon(l)} ${l}</span>`;
+
+  function rowHTML(name, val){
+    return `<div class="counter-row" data-counter="${name}">
+      <div class="ctr-name">${tag(name)} <strong>${name}</strong></div>
+      <div class="ctr-controls">
+        <button onclick="changeCardCounter('${card.id}','${name}',-1)">−</button>
+        <div class="ctr-val" id="ctr-val-${card.id}-${name.replace(/[^a-z0-9]/gi,'')}">${val}</div>
+        <button onclick="changeCardCounter('${card.id}','${name}',1)">+</button>
+      </div>
+    </div>`;
+  }
+  let html = '<div class="counter-modal-list">';
+  if(present.length===0){
+    html += `<div style="color:var(--text-dim);text-align:center;padding:10px">${t('no_counters')}</div>`;
+  }else{
+    present.forEach(k=>{ html += rowHTML(k, card.counters[k]); });
+  }
+  html += '</div>';
+  html += `<div style="margin-top:6px;color:var(--text-dim);font-size:13px">${isPt?'Adicionar tipo de contador:':'Add counter type:'}</div>`;
+  html += '<div class="counter-add-row">';
+  html += `<select id="ctr-quick" style="background:var(--bg-deep);color:var(--text-bright);border:1px solid var(--border-strong);padding:5px;font-family:'VT323',monospace;font-size:14px">`;
+  commonTypes.forEach(c=>{ html += `<option value="${c}">${c}</option>`; });
+  html += `<option value="__custom__">${isPt?'(customizado...)':'(custom...)'}</option>`;
+  html += '</select>';
+  html += `<input id="ctr-custom" type="text" placeholder="${t('counter_type_placeholder')}" style="display:none">`;
+  html += `<button class="amber" onclick="addCardCounterFromForm('${card.id}')">+1</button>`;
+  html += '</div>';
+
+  confirmModal(t('counters_title',{name:card.data.name}), html, [
+    {label:t('close_settings')||(isPt?'FECHAR':'CLOSE'),cls:'',fn:()=>{ /* refresca tela */ renderAll(); }}
+  ]);
+
+  // wire do select customizado
+  setTimeout(()=>{
+    const sel=document.getElementById('ctr-quick');
+    const inp=document.getElementById('ctr-custom');
+    if(sel) sel.addEventListener('change',()=>{
+      inp.style.display = sel.value==='__custom__'?'block':'none';
+      if(sel.value==='__custom__') inp.focus();
+    });
+  },50);
+}
+function addCardCounterFromForm(cardId){
+  const card = findCardAnywhere(cardId);
+  if(!card)return;
+  const sel = document.getElementById('ctr-quick');
+  const inp = document.getElementById('ctr-custom');
+  let type = sel.value==='__custom__' ? (inp.value||'').trim() : sel.value;
+  if(!type){toast(GAME.lang==='pt'?'Digite o tipo de contador':'Enter counter type');return}
+  if(!card.counters) card.counters={};
+  const wasPresent = card.counters[type]!=null && card.counters[type]!==0;
+  card.counters[type] = (card.counters[type]||0) + 1;
+  log(`⊕ ${card.data.name}: ${type} (${card.counters[type]})`,'player');
+  renderAll();
+  if(wasPresent){
+    const valEl = document.getElementById(`ctr-val-${card.id}-${type.replace(/[^a-z0-9]/gi,'')}`);
+    if(valEl) valEl.textContent = card.counters[type];
+  } else {
+    // novo tipo → reabre modal pra mostrar nova linha
+    openCardCounterModal(card);
+  }
+}
+function changeCardCounter(cardId, type, delta){
+  const card = findCardAnywhere(cardId);
+  if(!card)return;
+  if(!card.counters) card.counters={};
+  card.counters[type] = (card.counters[type]||0) + delta;
+  if(card.counters[type]===0) delete card.counters[type];
+  log(`${delta>0?'⊕':'⊖'} ${card.data.name}: ${type} (${card.counters[type]||0})`,'player');
+  // atualiza valor inline se modal aberto
+  const valEl = document.getElementById(`ctr-val-${card.id}-${type.replace(/[^a-z0-9]/gi,'')}`);
+  if(valEl){
+    valEl.textContent = card.counters[type]||0;
+  }else{
+    // contador novo (não estava no DOM) → reabre modal pra incluir
+    openCardCounterModal(card);
+  }
+  renderAll();
+}
+function findCardAnywhere(id){
+  for(const p of [GAME.player, GAME.ai]){
+    if(!p)continue;
+    for(const z of ['battlefield','lands','hand','graveyard','exile','commandZone']){
+      const f = p[z]?.find(c=>c.id===id);
+      if(f) return f;
+    }
+  }
+  return null;
+}
+
+// === AUTOMAÇÃO DE CONTADORES ===
+// Detecta padrões comuns no texto da carta e aplica contadores automaticamente quando ela entra
+function applyEntersWithCounters(card, ownerKey){
+  const text = (card.data.text||'').toLowerCase();
+  if(!card.counters) card.counters={};
+
+  // Loyalty inicial pra planeswalkers
+  if(/planeswalker/i.test(card.data.type)){
+    const m = text.match(/starting loyalty[:\s]+(\d+)/i) || (card.data.loyalty?[null,card.data.loyalty]:null);
+    if(m) card.counters['loyalty']=parseInt(m[1])||3;
+    else card.counters['loyalty']=3; // default seguro
+    log(t('enters_with_counters',{name:card.data.name,n:card.counters['loyalty'],type:'loyalty'}),'system');
+  }
+
+  // "enters with N +1/+1 counter(s)" / "enters the battlefield with N +1/+1"
+  const plusPlus = text.match(/enters[^.]*?(?:with|having) (\w+) \+1\/\+1 counter/i);
+  if(plusPlus){
+    const n = wordToNum(plusPlus[1]);
+    if(n>0){
+      card.counters['+1/+1'] = (card.counters['+1/+1']||0) + n;
+      log(t('enters_with_counters',{name:card.data.name,n:n,type:'+1/+1'}),'system');
+    }
+  }
+  // "enters with N charge counter(s)"
+  const charge = text.match(/enters[^.]*?(?:with|having) (\w+) charge counter/i);
+  if(charge){
+    const n = wordToNum(charge[1]);
+    if(n>0){
+      card.counters['charge'] = (card.counters['charge']||0) + n;
+      log(t('enters_with_counters',{name:card.data.name,n:n,type:'charge'}),'system');
+    }
+  }
+  // "enters with N quest counter(s)"
+  const quest = text.match(/enters[^.]*?(?:with|having) (\w+) quest counter/i);
+  if(quest){
+    const n = wordToNum(quest[1]);
+    if(n>0){
+      card.counters['quest'] = (card.counters['quest']||0) + n;
+      log(t('enters_with_counters',{name:card.data.name,n:n,type:'quest'}),'system');
+    }
+  }
+  // Energy: "you get {e}{e}{e}" — quando entra, dá energia
+  const enText = card.data.text||'';
+  if(/when .* enters/i.test(enText)){
+    const e = enText.match(/you get (\{e\})+/i);
+    if(e){
+      const count = (e[0].match(/\{e\}/gi)||[]).length;
+      const pl = GAME[ownerKey];
+      pl.counters.energy = (pl.counters.energy||0) + count;
+      log(t('auto_added_energy',{n:count, who: ownerKey==='player'?t('you_label'):t('ai_label')}),'system');
+    }
+  }
+  // Rad counters: cartas que dizem "give X rad counter(s)" / "target opponent gets a rad counter"
+  // quando entra, aplica ao oponente:
+  if(/when .* enters/i.test(enText)){
+    const rad = enText.match(/(?:target opponent|each opponent|opponent[s]?).{0,40}rad counter/i);
+    if(rad){
+      const opp = ownerKey==='player'?'ai':'player';
+      const pl = GAME[opp];
+      pl.counters.rad = (pl.counters.rad||0) + 1;
+      log(t('auto_added_rad',{n:1, who: opp==='player'?t('you_label'):t('ai_label')}),'system');
+    }
+  }
+}
+function wordToNum(w){
+  if(!w) return 0;
+  const map={a:1,an:1,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10};
+  if(/^\d+$/.test(w)) return parseInt(w);
+  return map[w.toLowerCase()]||0;
+}
+
+// === MODAL DE CONTADORES DO JOGADOR ===
+function openPlayerCounterModal(who){
+  const pl = GAME[who];
+  if(!pl){toast(GAME.lang==='pt'?'Jogador não encontrado':'Player not found');return}
+  const isPt = GAME.lang==='pt';
+  const label = who==='player' ? t('you_label') : t('ai_label');
+  function row(key, icon, name){
+    return `<div class="counter-row">
+      <div class="ctr-name">${icon} <strong>${name}</strong></div>
+      <div class="ctr-controls">
+        <button onclick="changePlayerCounter('${who}','${key}',-1)">−</button>
+        <div class="ctr-val" id="pctr-${who}-${key}">${pl.counters[key]||0}</div>
+        <button onclick="changePlayerCounter('${who}','${key}',1)">+</button>
+      </div>
+    </div>`;
+  }
+  let html = '<div class="counter-modal-list">';
+  html += row('rad','☢️',t('rad_counters'));
+  html += row('energy','⚡',t('energy_counters'));
+  html += row('experience','★',isPt?'Experiência':'Experience');
+  html += '</div>';
+  html += `<div style="color:var(--text-dim);font-size:12px">${isPt?'Contadores ficam no jogador e podem ser gastos por habilidades.':'Player-level counters used by abilities.'}</div>`;
+  confirmModal(t('counters_player_title')+' — '+label.toUpperCase(), html, [
+    {label:isPt?'FECHAR':'CLOSE',cls:'',fn:()=>renderAll()}
+  ]);
+}
+function changePlayerCounter(who, key, delta){
+  const pl = GAME[who];
+  if(!pl.counters) pl.counters={rad:0,energy:0,experience:0};
+  pl.counters[key] = Math.max(0,(pl.counters[key]||0) + delta);
+  log(`${delta>0?'⊕':'⊖'} ${who==='player'?t('you_label'):t('ai_label')}: ${key} (${pl.counters[key]})`,'player');
+  // atualiza valor inline no modal aberto
+  const valEl = document.getElementById(`pctr-${who}-${key}`);
+  if(valEl) valEl.textContent = pl.counters[key];
+  updateStats();
+}
+
+// === SETTINGS MODAL ===
+function openSettingsModal(){
+  const isPt = GAME.lang==='pt';
+  const hasKey = !!GAME.apiKey;
+  const aiAuto = GAME.aiAuto !== false;
+  const aiDelay = GAME.aiDelay || 900;
+  let html = '<div class="settings-row">';
+  html += `<label>${t('api_key_label')}</label>`;
+  html += `<input id="api-key-input" type="password" placeholder="sk-ant-..." value="${hasKey?'••••••••••••••••••••••••':''}">`;
+  html += `<div class="hint">${t('api_key_hint')}</div>`;
+  html += `<div class="hint" style="margin-top:6px">Status: <span class="${hasKey?'status-ok':'status-warn'}">${hasKey?t('api_key_status_set'):t('api_key_status_none')}</span></div>`;
+  html += '</div>';
+  // AI automation
+  html += '<div class="settings-row">';
+  html += `<label>${isPt?'TURNO AUTOMÁTICO DA IA':'AI AUTOMATIC TURN'}</label>`;
+  html += `<div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text-bright)">
+      <input type="checkbox" id="ai-auto-toggle" ${aiAuto?'checked':''} style="width:18px;height:18px;accent-color:var(--accent)">
+      ${isPt?'IA joga sozinha (não precisa clicar PRÓXIMO)':'AI plays alone (no need to click NEXT)'}
+    </label>
+  </div>`;
+  html += `<div style="margin-top:8px">
+    <label style="font-size:11px;color:var(--text-dim)">${isPt?'Velocidade (ms entre ações):':'Speed (ms between actions):'} <span id="ai-delay-val">${aiDelay}</span></label>
+    <input type="range" id="ai-delay-slider" min="200" max="2500" step="100" value="${aiDelay}" style="width:100%;accent-color:var(--accent)">
+  </div>`;
+  html += `<div class="hint" style="margin-top:6px">${isPt?'Quando atacar, ela vai parar e esperar você bloquear.':'When attacking, it pauses and waits for you to block.'}</div>`;
+  html += '</div>';
+
+  confirmModal(t('settings_title'), html, [
+    {label:t('save'),cls:'amber',fn:()=>{
+      const v = document.getElementById('api-key-input').value.trim();
+      if(v && !v.startsWith('••')){
+        GAME.apiKey = v;
+        localStorage.setItem('claude_api_key', v);
+        toast(t('api_key_saved'));
+      }
+      // salva config AI
+      GAME.aiAuto = document.getElementById('ai-auto-toggle').checked;
+      GAME.aiDelay = parseInt(document.getElementById('ai-delay-slider').value);
+      localStorage.setItem('ai_auto', GAME.aiAuto?'1':'0');
+      localStorage.setItem('ai_delay', String(GAME.aiDelay));
+    }},
+    {label:t('clear'),cls:'red',fn:()=>{
+      GAME.apiKey = '';
+      localStorage.removeItem('claude_api_key');
+      toast(t('api_key_cleared'));
+    }},
+    {label:t('close_settings'),cls:'',fn:()=>{}}
+  ]);
+
+  // wire o slider pra atualizar label
+  setTimeout(()=>{
+    const sl = document.getElementById('ai-delay-slider');
+    const lb = document.getElementById('ai-delay-val');
+    if(sl) sl.addEventListener('input',()=>{lb.textContent=sl.value});
+  },50);
+}
+
+// Botão EXPLICAR na bottom bar — explica a última carta inspecionada
+document.getElementById('btn-explain').addEventListener('click',()=>{
+  if(!GAME.currentInspectorCard){
+    toast(t('no_card_to_explain'));
+    return;
+  }
+  openInspector(GAME.currentInspectorCard);
+  // dispara explicação local automaticamente
+  setTimeout(()=>document.getElementById('ii-explain-btn').click(), 50);
+});
+
+/* === DRAG & DROP NOS ZONES === */
+document.querySelectorAll('.zone-row').forEach(zone=>{
+  // só zonas do player aceitam drop
+  if(zone.dataset.zone.startsWith('player-')){
+    zone.addEventListener('dragover',e=>{
+      e.preventDefault();
+      zone.classList.add('drop-target');
+    });
+    zone.addEventListener('dragleave',()=>zone.classList.remove('drop-target'));
+    zone.addEventListener('drop',e=>{
+      e.preventDefault();
+      zone.classList.remove('drop-target');
+      const id=e.dataTransfer.getData('text/plain');
+      onDropToZone(id, zone.dataset.zone);
+    });
+  }
+});
+
+/* === LÓGICA DE JOGO === */
+function isLand(data){return /Land/i.test(data.type)}
+function isCreature(data){return /Creature/i.test(data.type)}
+function isInstant(data){return /Instant/i.test(data.type)}
+function isSorcery(data){return /Sorcery/i.test(data.type)}
+function isArtifact(data){return /Artifact/i.test(data.type)}
+function isEnchantment(data){return /Enchantment/i.test(data.type)}
+function isPermanent(data){return /Creature|Artifact|Enchantment|Planeswalker|Land/i.test(data.type)}
+
+/* Heurística simples de custo: conta símbolos de mana no cost string */
+function parseCost(cost){
+  // cost vem como "{2}{U}{W}" etc
+  const need={W:0,U:0,B:0,R:0,G:0,C:0,generic:0};
+  if(!cost)return need;
+  const m=cost.matchAll(/\{([^}]+)\}/g);
+  for(const x of m){
+    const s=x[1];
+    if(/^\d+$/.test(s)) need.generic+=parseInt(s);
+    else if(s==='X') need.generic+=0; // ignorar X por simplicidade
+    else if(s==='W'||s==='U'||s==='B'||s==='R'||s==='G') need[s]++;
+    else if(s==='C') need.C++;
+    else need.generic++; // híbrido, fácil/2cores etc → trata como genérico (V.0.1)
+  }
+  return need;
+}
+
+function canPayCost(cost, pool){
+  const need=parseCost(cost);
+  const p={...pool};
+  for(const c of ['W','U','B','R','G']){
+    if(need[c]>p[c]) return false;
+    p[c]-=need[c];
+  }
+  if(need.C>p.C) return false;
+  p.C-=need.C;
+  const remaining=p.W+p.U+p.B+p.R+p.G+p.C;
+  return remaining>=need.generic;
+}
+
+function payCost(cost, pool){
+  // paga e retorna pool atualizado (modifica em lugar)
+  const need=parseCost(cost);
+  for(const c of ['W','U','B','R','G']){
+    pool[c]-=need[c];
+  }
+  pool.C-=need.C;
+  // paga genérico drenando primeiro C, depois sobras coloridas
+  let gen=need.generic;
+  while(gen>0 && pool.C>0){pool.C--;gen--}
+  for(const c of ['W','U','B','R','G']){
+    while(gen>0 && pool[c]>0){pool[c]--;gen--}
+  }
+}
+
+/* Produz mana de um terreno tappado (baseado no tipo) */
+function landManaTypes(card){
+  const t=card.data.type;
+  const out=[];
+  // basics
+  if(/Plains/.test(t))out.push('W');
+  if(/Island/.test(t))out.push('U');
+  if(/Swamp/.test(t))out.push('B');
+  if(/Mountain/.test(t))out.push('R');
+  if(/Forest/.test(t))out.push('G');
+  if(out.length)return out;
+  // não-básicos: tenta extrair do oracle text
+  const text=card.data.text||'';
+  const symbols=[...text.matchAll(/\{([WUBRG])\}/g)].map(m=>m[1]);
+  if(symbols.length) return [...new Set(symbols)];
+  // fallback: incolor
+  return ['C'];
+}
+
+/* === DROP HANDLER === */
+function onDropToZone(cardId, zone){
+  const card=GAME.player.hand.find(c=>c.id===cardId);
+  if(!card){return}
+  if(GAME.activePlayer!=='player'){
+    toast(t('your_turn'));return;
+  }
+  // drop em terrenos
+  if(zone==='player-lands'){
+    if(!isLand(card.data)){toast(t('not_a_land'));return}
+    if(GAME.landPlayedThisTurn){toast(t('only_land_per_turn'));return}
+    if(GAME.phase!=='main' && GAME.phase!=='main2'){toast(t('only_main_phase'));return}
+    GAME.player.hand=GAME.player.hand.filter(c=>c.id!==cardId);
+    GAME.player.lands.push(card);
+    GAME.landPlayedThisTurn=true;
+    log(t('you_played_land',{name:card.data.name}),'player');
+    renderAll();
+    return;
+  }
+  // drop em battlefield
+  if(zone==='player-battlefield'){
+    if(isLand(card.data)){toast(t('lands_zone_wrong'));return}
+    if(!isPermanent(card.data)){
+      tryCastSpell(card);
+      return;
+    }
+    tryCastPermanent(card);
+  }
+}
+
+/* === DETECÇÃO DE MODOS NA CARTA ===
+   Suporta: split cards "A // B", choose one/two/three, modais com bullet list,
+   habilidades de "either... or...", Charms, kicker simples. */
+function detectModes(card){
+  const text = card.data.text || '';
+  const name = card.data.name || '';
+  const isPt = GAME.lang==='pt';
+
+  // 1. SPLIT CARD: nome com "//"
+  if(name.includes(' // ')){
+    const parts = name.split(' // ').map(p=>p.trim());
+    return {
+      type: 'split',
+      title: isPt?'ESCOLHA QUAL FACE CONJURAR':'CHOOSE WHICH HALF TO CAST',
+      mode: 'one',
+      options: parts.map(p=>({
+        label: p,
+        description: isPt?`Conjurar "${p}"`:`Cast "${p}"`,
+      }))
+    };
+  }
+
+  // 2. MODAIS: "Choose one —", "Choose two —", "Choose one or more —", etc
+  const choose = text.match(/Choose (one or more|one|two|three|four|up to one|up to two|up to three|up to four)\s*[—\-]/i);
+  if(choose){
+    const modeWord = choose[1].toLowerCase();
+    let n = 1, upTo = false;
+    if(modeWord === 'one or more'){
+      // pelo menos 1, pode ser todos
+      upTo = false; // não é "up to", min=1
+      // n vai ser definido depois com base no número de opções
+      n = 99;
+    } else if(modeWord.startsWith('up to')){
+      upTo = true;
+      n = {'up to one':1,'up to two':2,'up to three':3,'up to four':4}[modeWord];
+    } else {
+      n = {one:1,two:2,three:3,four:4}[modeWord];
+    }
+    const afterChoose = text.slice(choose.index + choose[0].length);
+    const options = extractModes(afterChoose);
+    if(options.length >= 2){
+      // se "one or more", max = total de opções
+      if(modeWord === 'one or more') n = options.length;
+      return {
+        type: 'modal',
+        title: modeWord==='one or more' ?
+          (isPt?'ESCOLHA UM OU MAIS':'CHOOSE ONE OR MORE') :
+          (isPt?'ESCOLHA ':'CHOOSE ')+(upTo?(isPt?`ATÉ ${n}`:`UP TO ${n}`):n.toString().toUpperCase()),
+        mode: upTo ? 'up-to-'+n : (n===1?'one':n===2?'two':n===3?'three':'multi'),
+        maxChoices: n,
+        minChoices: (upTo || modeWord==='one or more') ? (modeWord==='one or more'?1:0) : n,
+        options: options.map(o=>({label: o.length>60?o.slice(0,60)+'...':o, description:o}))
+      };
+    }
+  }
+
+  // 3. "Either X or Y" simples
+  const either = text.match(/^[^.]*?\beither\s+([^.]+?)\s+or\s+([^.]+?)\./im);
+  if(either){
+    return {
+      type:'either',
+      title: isPt?'ESCOLHA UMA OPÇÃO':'CHOOSE ONE',
+      mode:'one',
+      options:[
+        {label: either[1].slice(0,60), description: either[1]},
+        {label: either[2].slice(0,60), description: either[2]},
+      ]
+    };
+  }
+
+  return null;
+}
+
+function extractModes(textAfterChoose){
+  // Tenta separar por bullets (•), depois por ponto-vírgula+ponto, depois por linhas
+  const tt = textAfterChoose;
+  // por bullets
+  if(tt.includes('•')){
+    return tt.split('•').map(s=>s.trim()).filter(s=>s.length>3).slice(0,6);
+  }
+  // por linhas que parecem opções (cada linha começa com letra maiúscula geralmente)
+  const lines = tt.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(lines.length>=2){
+    // pega linhas até achar algo que não pareça opção
+    const opts = [];
+    for(const l of lines){
+      // pra parar quando tiver "Then" ou outro texto fora do modal
+      if(/^(if|when|whenever|at|until|then)\b/i.test(l) && opts.length>=2) break;
+      opts.push(l);
+      if(opts.length>=6) break;
+    }
+    if(opts.length>=2) return opts;
+  }
+  // fallback: separa por ponto e vírgula
+  return tt.split(/[;]\s*/).map(s=>s.trim()).filter(s=>s.length>3).slice(0,6);
+}
+
+/* === MODAL DE ESCOLHA DE MODO === */
+function openModeChoiceModal(modes, card, onChoose){
+  const isPt = GAME.lang==='pt';
+  const selected = new Set();
+  const maxN = modes.maxChoices || 1;
+  const minN = modes.minChoices != null ? modes.minChoices : 1;
+
+  function renderInner(){
+    let html = '';
+    html += `<div style="font-size:13px;color:var(--text-dim);margin-bottom:10px">${card.data.name}</div>`;
+    if(modes.type==='modal' && maxN>1){
+      html += `<div style="font-size:12px;color:var(--amber);margin-bottom:8px">${isPt?'Selecionados':'Selected'}: ${selected.size}/${maxN}${minN<maxN?' ('+(isPt?'min':'min')+' '+minN+')':''}</div>`;
+    }
+    html += '<div class="mode-choice-list">';
+    modes.options.forEach((opt,i)=>{
+      const isSel = selected.has(i);
+      const disabled = !isSel && selected.size >= maxN;
+      html += `
+        <div class="mode-option ${isSel?'selected':''} ${disabled?'disabled':''}"
+             onclick="${disabled?'':"toggleModeOption("+i+")"}">
+          <div class="mode-check">${isSel?'✓':'○'}</div>
+          <div class="mode-text">
+            <div class="mode-label">${opt.label}</div>
+            ${opt.description && opt.description!==opt.label?`<div class="mode-desc">${opt.description}</div>`:''}
+          </div>
+        </div>`;
+    });
+    html += '</div>';
+    document.getElementById('modal-body').innerHTML = html;
+  }
+
+  // expõe globalmente o toggle (modal usa onclick string)
+  window.toggleModeOption = function(i){
+    if(selected.has(i)){
+      selected.delete(i);
+    } else {
+      if(selected.size >= maxN) return;
+      selected.add(i);
+      if(maxN===1){
+        // auto-confirm pra escolha única (single-select)
+        const chosen = [...selected].map(idx=>modes.options[idx]);
+        document.getElementById('modal').classList.remove('visible');
+        onChoose(chosen);
+        return;
+      }
+    }
+    renderInner();
+  };
+
+  const actions = [];
+  if(maxN>1 || minN===0){
+    actions.push({label: isPt?'CONFIRMAR':'CONFIRM', cls:'amber', fn:()=>{
+      if(selected.size < minN){
+        toast(isPt?`Escolha pelo menos ${minN}`:`Choose at least ${minN}`);
+        // reabre
+        openModeChoiceModal(modes,card,onChoose);
+        return;
+      }
+      const chosen = [...selected].map(idx=>modes.options[idx]);
+      onChoose(chosen);
+    }});
+  }
+  actions.push({label: t('cancel'), cls:'', fn:()=>{
+    // cancela o cast
+    onChoose(null);
+  }});
+
+  confirmModal(modes.title, '', actions);
+  renderInner();
+}
+
+function tryCastPermanent(card){
+  if(GAME.phase!=='main' && GAME.phase!=='main2'){toast(t('spells_main_only'));return}
+  if(!canPayCost(card.data.cost, GAME.manaPool)){
+    toast(t('not_enough_mana'));return;
+  }
+
+  // Verifica se tem modos
+  const modes = detectModes(card);
+  if(modes){
+    openModeChoiceModal(modes, card, (chosen)=>{
+      if(!chosen) return; // cancelou
+      finalizeCastPermanent(card, chosen);
+    });
+    return;
+  }
+
+  finalizeCastPermanent(card, null);
+}
+
+function finalizeCastPermanent(card, chosenModes){
+  payCost(card.data.cost, GAME.manaPool);
+  GAME.player.hand=GAME.player.hand.filter(c=>c.id!==card.id);
+  if(isCreature(card.data)) card.sickness=true;
+  applyEntersWithCounters(card, 'player');
+  // armazena modos escolhidos na carta pra histórico
+  if(chosenModes){
+    card.chosenModes = chosenModes;
+  }
+  GAME.player.battlefield.push(card);
+  let logMsg = t('you_cast',{name:card.data.name});
+  if(chosenModes && chosenModes.length){
+    logMsg += ' · ' + chosenModes.map(m=>'['+m.label.slice(0,30)+']').join(' ');
+  }
+  log(logMsg, 'player');
+  renderAll();
+}
+
+function tryCastSpell(card){
+  if(isSorcery(card.data) && GAME.phase!=='main' && GAME.phase!=='main2'){
+    toast(t('sorceries_main_only'));return;
+  }
+  if(!canPayCost(card.data.cost, GAME.manaPool)){
+    toast(t('not_enough_mana'));return;
+  }
+
+  // Verifica se tem modos
+  const modes = detectModes(card);
+  if(modes){
+    openModeChoiceModal(modes, card, (chosen)=>{
+      if(!chosen) return;
+      finalizeCastSpell(card, chosen);
+    });
+    return;
+  }
+
+  finalizeCastSpell(card, null);
+}
+
+function finalizeCastSpell(card, chosenModes){
+  const isPt = GAME.lang==='pt';
+  // mostra texto da magia + modos escolhidos
+  let bodyHTML = `<strong>${isPt?'Texto':'Text'}:</strong><br><em>${card.data.text||(isPt?'(sem texto)':'(no text)')}</em>`;
+  if(chosenModes && chosenModes.length){
+    bodyHTML += `<br><br><strong style="color:var(--amber)">${isPt?'Modo(s) escolhido(s)':'Chosen mode(s)'}:</strong><br>`;
+    chosenModes.forEach(m=>{
+      bodyHTML += `• ${m.description||m.label}<br>`;
+    });
+  }
+  bodyHTML += `<br>${isPt?'Confirme pra pagar o custo e aplicar manualmente o efeito.':'Confirm to pay the cost and apply the effect manually.'}`;
+
+  confirmModal(
+    (isPt?'RESOLVER MAGIA: ':'RESOLVE SPELL: ')+card.data.name,
+    bodyHTML,
+    [
+      {label:t('confirm'),cls:'amber',fn:()=>{
+        payCost(card.data.cost, GAME.manaPool);
+        GAME.player.hand=GAME.player.hand.filter(c=>c.id!==card.id);
+        card.chosenModes = chosenModes;
+        GAME.player.graveyard.push(card);
+        let logMsg = t('you_cast',{name:card.data.name});
+        if(chosenModes && chosenModes.length){
+          logMsg += ' · ' + chosenModes.map(m=>'['+m.label.slice(0,30)+']').join(' ');
+        }
+        log(logMsg, 'player');
+        renderAll();
+        openManualEffectPanel(card);
+      }},
+      {label:t('cancel'),cls:'',fn:()=>{}}
+    ]
+  );
+}
+
+function castCommander(){
+  const p=GAME.player;
+  const cmdr=p.commandZone[0];
+  if(!cmdr){toast(t('no_commander'));return}
+  if(GAME.phase!=='main' && GAME.phase!=='main2'){toast(t('spells_main_only'));return}
+  const tax=p.cmdrCast*2;
+  if(!canPayCost(cmdr.data.cost, GAME.manaPool) || totalMana(GAME.manaPool)<cmdrCmcWithTax(cmdr,tax)){
+    toast(t('not_enough_mana_cmdr',{cost:cmdr.data.cost,tax:tax}));return;
+  }
+  // Verifica se commander tem modos (raríssimo mas possível)
+  const modes = detectModes(cmdr);
+  if(modes){
+    openModeChoiceModal(modes, cmdr, (chosen)=>{
+      if(!chosen) return;
+      finalizeCastCommander(cmdr, tax, chosen);
+    });
+    return;
+  }
+  finalizeCastCommander(cmdr, tax, null);
+}
+
+function finalizeCastCommander(cmdr, tax, chosenModes){
+  const p = GAME.player;
+  payCost(cmdr.data.cost, GAME.manaPool);
+  let gen=tax;
+  for(const c of ['C','W','U','B','R','G']){
+    while(gen>0 && GAME.manaPool[c]>0){GAME.manaPool[c]--;gen--}
+  }
+  if(gen>0){toast(t('not_enough_mana'));return}
+  p.commandZone=[];
+  cmdr.sickness=true;
+  applyEntersWithCounters(cmdr, 'player');
+  if(chosenModes) cmdr.chosenModes = chosenModes;
+  p.battlefield.push(cmdr);
+  p.cmdrCast++;
+  let logMsg = t('you_cast_cmdr',{name:cmdr.data.name,tax:tax});
+  if(chosenModes && chosenModes.length){
+    logMsg += ' · ' + chosenModes.map(m=>'['+m.label.slice(0,30)+']').join(' ');
+  }
+  log(logMsg,'player');
+  renderAll();
+}
+
+function totalMana(pool){return pool.W+pool.U+pool.B+pool.R+pool.G+pool.C}
+function cmdrCmcWithTax(cmdr, tax){return (cmdr.data.cmc||0)+tax}
+
+/* === CLIQUE NO BATTLEFIELD === */
+function onBattlefieldClick(card, zoneName){
+  const isMine=zoneName.startsWith('player');
+  if(GAME.activePlayer!=='player' && isMine){toast(t('your_turn'));return}
+
+  // se é land minha em main phase → tap pra mana
+  if(isMine && isLand(card.data) && (GAME.phase==='main'||GAME.phase==='main2'||GAME.phase==='combat')){
+    if(card.tapped){toast(t('already_tapped'));return}
+    card.tapped=true;
+    const types=landManaTypes(card);
+    if(types.length===1){
+      GAME.manaPool[types[0]]++;
+      log(`▼ ${card.data.name} → +${types[0]}`,'player');
+      renderAll();
+    }else{
+      const actions=types.map(ty=>({label:`{${ty}}`,cls:'amber',fn:()=>{
+        GAME.manaPool[ty]++;
+        log(`▼ ${card.data.name} → +${ty}`,'player');
+        renderAll();
+      }}));
+      actions.push({label:t('cancel'),cls:'',fn:()=>{card.tapped=false;renderAll();}});
+      confirmModal(t('choose_mana_color'), t('mana_choice_body',{name:card.data.name}), actions);
+    }
+    return;
+  }
+
+  if(isMine && isCreature(card.data) && GAME.phase==='combat-declare-attackers'){
+    if(card.tapped){toast(t('tapped_cant_attack'));return}
+    if(card.sickness && !/haste/i.test(card.data.keywords?.join(' ')||'') && !/haste/i.test(card.data.text||'')){
+      toast(t('sickness'));return;
+    }
+    if(GAME.attackers.includes(card.id)){
+      GAME.attackers=GAME.attackers.filter(id=>id!==card.id);
+    }else{
+      GAME.attackers.push(card.id);
+    }
+    renderAll();
+    return;
+  }
+
+  if(!isMine && isCreature(card.data) && GAME.phase==='combat-declare-blockers' && GAME.activePlayer==='ai'){
+    GAME._blockTarget=card.id;
+    toast(GAME.lang==='pt'?
+      'Agora clique numa criatura sua pra bloquear, ou "PRÓXIMO" pra não bloquear':
+      'Now click your creature to block, or "NEXT" to skip blocking');
+    return;
+  }
+  if(isMine && isCreature(card.data) && GAME.phase==='combat-declare-blockers' && GAME.activePlayer==='ai'){
+    if(!GAME._blockTarget){toast(GAME.lang==='pt'?'Primeiro clique numa atacante da IA':'First click an AI attacker');return}
+    if(card.tapped){toast(t('already_tapped'));return}
+    GAME.blockers[GAME._blockTarget]=card.id;
+    log((GAME.lang==='pt'?'Você bloqueia':'You block')+` ${cardById(GAME._blockTarget).data.name} ${GAME.lang==='pt'?'com':'with'} ${card.data.name}`,'player');
+    GAME._blockTarget=null;
+    renderAll();
+    return;
+  }
+
+  // senão: inspector com ações (carta no campo)
+  const owner = zoneName.startsWith('player')?'player':'ai';
+  openInspector(card.data, card, owner);
+}
+
+function cardById(id){
+  return [...GAME.player.battlefield, ...GAME.player.lands, ...GAME.ai.battlefield, ...GAME.ai.lands]
+    .find(c=>c.id===id);
+}
+
+/* === FASES === */
+function setPhase(p){
+  GAME.phase=p;
+  const labelsPt={
+    untap:'UNTAP',draw:'DRAW',main:'MAIN 1',
+    'combat-begin':'COMBATE · INÍCIO',
+    'combat-declare-attackers':'COMBATE · DECLARAR ATACANTES',
+    'combat-declare-blockers':'COMBATE · DECLARAR BLOQUEADORES',
+    'combat-damage':'COMBATE · DANO',
+    'combat-end':'COMBATE · FIM',
+    main2:'MAIN 2',end:'FIM DE TURNO',
+    'ai-turn':'TURNO DA IA'
+  };
+  const labelsEn={
+    untap:'UNTAP',draw:'DRAW',main:'MAIN 1',
+    'combat-begin':'COMBAT · BEGIN',
+    'combat-declare-attackers':'COMBAT · DECLARE ATTACKERS',
+    'combat-declare-blockers':'COMBAT · DECLARE BLOCKERS',
+    'combat-damage':'COMBAT · DAMAGE',
+    'combat-end':'COMBAT · END',
+    main2:'MAIN 2',end:'END STEP',
+    'ai-turn':'AI TURN'
+  };
+  const labels = GAME.lang==='pt'?labelsPt:labelsEn;
+  const turnLabel = GAME.lang==='pt'?'TURNO':'TURN';
+  document.getElementById('phase-indicator').textContent=`${turnLabel} ${GAME.turn} · ${labels[p]||p.toUpperCase()}`;
+}
+
+function enableMainPhaseButtons(){
+  document.getElementById('btn-main').disabled=false;
+  document.getElementById('btn-combat').disabled=false;
+  document.getElementById('btn-end').disabled=false;
+}
+
+document.getElementById('btn-main').addEventListener('click',()=>{if(GAME.activePlayer==='player')setPhase('main')});
+document.getElementById('btn-main2').addEventListener('click',()=>{if(GAME.activePlayer==='player')setPhase('main2')});
+document.getElementById('btn-combat').addEventListener('click',()=>{
+  if(GAME.activePlayer!=='player')return;
+  setPhase('combat-declare-attackers');
+  toast(t('click_creatures_attack'));
+});
+document.getElementById('btn-end').addEventListener('click',endPlayerTurn);
+document.getElementById('btn-concede').addEventListener('click',()=>{
+  confirmModal(t('concede_q'),t('concede_body'),[
+    {label:t('yes_concede'),cls:'red',fn:()=>endGame('ai',GAME.lang==='pt'?'Você desistiu':'You conceded')},
+    {label:t('no'),cls:'',fn:()=>{}}
+  ]);
+});
+
+document.getElementById('btn-pass').addEventListener('click',onPassButton);
+
+function onPassButton(){
+  // contexto-dependente
+  if(GAME.activePlayer==='player'){
+    if(GAME.phase==='combat-declare-attackers'){
+      if(GAME.attackers.length===0){
+        log('Você não declara atacantes.','player');
+        setPhase('main2');
+        return;
+      }
+      log(`Você ataca com ${GAME.attackers.length} criatura(s)`,'player');
+      GAME.attackers.forEach(id=>{
+        const c=GAME.player.battlefield.find(x=>x.id===id);
+        if(c && !/vigilance/i.test(c.data.keywords?.join(' ')||'') && !/vigilance/i.test(c.data.text||''))
+          c.tapped=true;
+      });
+      aiDeclareBlockers();
+      resolveCombatDamage();
+      GAME.attackers=[];GAME.blockers={};
+      setPhase('main2');
+      renderAll();
+      return;
+    }
+    endPlayerTurn();
+    return;
+  }
+  // IA turn:
+  if(GAME.phase==='combat-declare-blockers'){
+    // resolve combate (já foi bloqueado/decidido), continua a fila
+    runNextAIAction();
+    // se modo auto, retoma
+    if(GAME.aiAuto !== false && !GAME.aiPaused && GAME.activePlayer==='ai'){
+      scheduleNextAIAction();
+    }
+    updatePassButton();
+    return;
+  }
+  // Se está rodando automático: clique pausa
+  if(GAME.aiAuto !== false && !GAME.aiPaused){
+    pauseAI();
+    return;
+  }
+  // Se pausado/modo manual: avança 1 passo
+  if(GAME.aiPaused){
+    runNextAIAction();
+    updatePassButton();
+    return;
+  }
+  // Default: avança
+  runNextAIAction();
+}
+
+function endPlayerTurn(){
+  if(GAME.player.hand.length>7){
+    const n=GAME.player.hand.length;
+    while(GAME.player.hand.length>7){
+      const idx=GAME.player.hand.reduce((a,c,i,arr)=>arr[a].data.cmc<c.data.cmc?i:a,0);
+      const d=GAME.player.hand.splice(idx,1)[0];
+      GAME.player.graveyard.push(d);
+    }
+    log(t('discard_to_seven',{n:n}),'system');
+  }
+  GAME.manaPool={W:0,U:0,B:0,R:0,G:0,C:0};
+  GAME.player.battlefield.forEach(c=>{c.sickness=false;c.damage=0});
+  GAME.activePlayer='ai';
+  setPhase('ai-turn');
+  log(t('end_your_turn'),'phase');
+  renderAll();
+  aiStartTurn();
+}
+
+/* === IA === */
+function aiStartTurn(){
+  GAME.aiQueue=[];
+  GAME.aiLandPlayed=false;
+  GAME.aiLandPlayedCountedThisTurn=false;
+  GAME.aiPaused = false;
+  // 1. UNTAP
+  GAME.aiQueue.push({type:'untap',text:'IA: UNTAP'});
+  // 2. DRAW
+  GAME.aiQueue.push({type:'draw',text:'IA: COMPRA'});
+  // 3. Main phase decisões
+  GAME.aiQueue.push({type:'plan-main',text:'IA: PLANEJAMENTO'});
+  GAME.aiQueue.push({type:'combat',text:'IA: COMBATE'});
+  GAME.aiQueue.push({type:'end-turn',text:'IA: FIM DE TURNO'});
+
+  toast(t('ai_turn'));
+  updatePassButton();
+
+  // Se modo automático ligado, começa a rodar a fila sozinho
+  if(GAME.aiAuto !== false){
+    scheduleNextAIAction();
+  }
+}
+
+// agenda próxima ação da IA com delay (modo automático)
+function scheduleNextAIAction(){
+  if(GAME.aiPaused) return;
+  if(GAME.activePlayer !== 'ai') return;
+  const delay = GAME.aiDelay || 900;
+  GAME._aiTimer = setTimeout(()=>{
+    if(GAME.aiPaused || GAME.activePlayer!=='ai') return;
+    runNextAIAction();
+    // Continue rodando se:
+    // - ainda tem ações na fila → próxima ação
+    // - fila zerou MAS ainda é turno da IA → última chamada vai transferir pro player
+    if(GAME.activePlayer === 'ai'
+       && GAME.phase !== 'combat-declare-blockers'
+       && !GAME.aiPaused){
+      scheduleNextAIAction();
+    } else {
+      updatePassButton();
+    }
+  }, delay);
+}
+
+function pauseAI(){
+  GAME.aiPaused = true;
+  if(GAME._aiTimer) clearTimeout(GAME._aiTimer);
+  updatePassButton();
+}
+function resumeAI(){
+  GAME.aiPaused = false;
+  if(GAME.activePlayer==='ai') scheduleNextAIAction();
+  updatePassButton();
+}
+
+function updatePassButton(){
+  const btn = document.getElementById('btn-pass');
+  if(!btn) return;
+  if(GAME.activePlayer==='ai'){
+    if(GAME.phase==='combat-declare-blockers'){
+      // aguardando bloqueio do player — botão diz "RESOLVER COMBATE"
+      btn.textContent = GAME.lang==='pt'?'▶ RESOLVER COMBATE':'▶ RESOLVE COMBAT';
+      btn.classList.remove('amber');
+    } else if(GAME.aiAuto !== false && !GAME.aiPaused){
+      btn.textContent = GAME.lang==='pt'?'⏸ AUTO — PAUSAR':'⏸ AUTO — PAUSE';
+      btn.classList.add('amber');
+    } else {
+      btn.textContent = GAME.lang==='pt'?'▶ PRÓXIMO (IA)':'▶ NEXT (AI)';
+      btn.classList.remove('amber');
+    }
+  } else {
+    btn.textContent = GAME.lang==='pt'?'▶ PRÓXIMO (IA)':'▶ NEXT (AI)';
+    btn.classList.remove('amber');
+  }
+}
+
+function runNextAIAction(){
+  if(GAME.aiQueue.length===0){
+    GAME.activePlayer='player';
+    GAME.turn++;
+    GAME.landPlayedThisTurn=false;
+    GAME.manaPool={W:0,U:0,B:0,R:0,G:0,C:0};
+    GAME.player.battlefield.forEach(c=>c.sickness=false);
+    [...GAME.player.battlefield,...GAME.player.lands].forEach(c=>c.tapped=false);
+    setPhase('main');
+    log(t('your_turn_n',{n:GAME.turn}),'phase');
+    drawCard(GAME.player);
+    log(t('you_drew'),'player');
+    renderAll();
+    updatePassButton();
+    return;
+  }
+  const act=GAME.aiQueue.shift();
+  executeAIAction(act);
+}
+
+function executeAIAction(act){
+  switch(act.type){
+    case 'untap':
+      [...GAME.ai.battlefield,...GAME.ai.lands].forEach(c=>c.tapped=false);
+      log('IA: UNTAP de todos','ai');
+      break;
+    case 'draw':
+      if(GAME.turn>1 || GAME.ai !== GAME.player){ // IA sempre compra (ela nunca é o "first player who skips draw")
+        drawCard(GAME.ai);
+        log('IA: comprou 1 carta','ai');
+      }
+      break;
+    case 'plan-main':
+      aiMainPhase();
+      break;
+    case 'cast':
+      aiCastCard(act.card);
+      break;
+    case 'land':
+      aiPlayLand(act.card);
+      break;
+    case 'tap-land':
+      act.card.tapped=true;
+      GAME.aiManaPool=GAME.aiManaPool||{W:0,U:0,B:0,R:0,G:0,C:0};
+      // produz mana
+      const types=landManaTypes(act.card);
+      const chosen=types[0]; // IA simplifica e pega primeira (V.0.1)
+      GAME.aiManaPool[chosen]++;
+      break;
+    case 'cast-commander':
+      aiCastCommander();
+      break;
+    case 'combat':
+      aiCombat();
+      break;
+    case 'end-turn':
+      // descarte
+      while(GAME.ai.hand.length>7){
+        const idx=GAME.ai.hand.reduce((a,c,i,arr)=>arr[a].data.cmc<c.data.cmc?i:a,0);
+        const d=GAME.ai.hand.splice(idx,1)[0];
+        GAME.ai.graveyard.push(d);
+        log(`IA descartou: ${d.data.name}`,'ai');
+      }
+      GAME.aiManaPool={W:0,U:0,B:0,R:0,G:0,C:0};
+      GAME.ai.battlefield.forEach(c=>{c.sickness=false;c.damage=0});
+      log(t('end_ai_turn'),'phase');
+      break;
+  }
+  renderAll();
+  // se a fila acabou, próximo clique inicia novo turno do player
+}
+
+function aiMainPhase(){
+  // strategy depends on difficulty
+  const diff=GAME.difficulty;
+  // 1. jogar terreno se tiver
+  const landInHand=GAME.ai.hand.find(c=>isLand(c.data));
+  if(landInHand && !GAME.aiLandPlayed){
+    GAME.aiQueue.unshift({type:'land',card:landInHand});
+    GAME.aiLandPlayed=true;
+  }
+  // 2. calcular mana disponível (tapando todos os lands)
+  GAME.aiManaPool={W:0,U:0,B:0,R:0,G:0,C:0};
+  GAME.ai.lands.forEach(l=>{
+    if(!l.tapped){
+      const types=landManaTypes(l);
+      GAME.aiManaPool[types[0]]++; // simplifica
+    }
+  });
+  // tb conta o land que vai jogar
+  if(landInHand && !GAME.aiLandPlayedCountedThisTurn){
+    const types=landManaTypes(landInHand);
+    GAME.aiManaPool[types[0]]++;
+    GAME.aiLandPlayedCountedThisTurn=true;
+  }
+  // 3. cast commander se ainda não jogou e tem mana
+  const cmdr=GAME.ai.commandZone[0];
+  if(cmdr){
+    const tax=GAME.ai.cmdrCast*2;
+    const needTotal=(cmdr.data.cmc||0)+tax;
+    if(totalMana(GAME.aiManaPool)>=needTotal && canPayCost(cmdr.data.cost, GAME.aiManaPool)){
+      GAME.aiQueue.unshift({type:'cast-commander'});
+    }
+  }
+  // 4. cast carta de maior CMC que cabe na mana
+  const castable=GAME.ai.hand
+    .filter(c=>!isLand(c.data) && isPermanent(c.data) && canPayCost(c.data.cost,GAME.aiManaPool))
+    .sort((a,b)=>b.data.cmc-a.data.cmc);
+
+  // por dificuldade limita # casts
+  const maxCasts={easy:1,medium:3,hard:5}[diff];
+  let casts=0;
+  for(const c of castable){
+    if(casts>=maxCasts)break;
+    if(canPayCost(c.data.cost,GAME.aiManaPool)){
+      // simula pagamento pra próximas
+      const poolBackup={...GAME.aiManaPool};
+      payCost(c.data.cost, GAME.aiManaPool);
+      GAME.aiQueue.unshift({type:'cast',card:c});
+      casts++;
+    }
+  }
+}
+
+function aiPlayLand(card){
+  GAME.ai.hand=GAME.ai.hand.filter(c=>c.id!==card.id);
+  GAME.ai.lands.push(card);
+  log(`IA jogou terreno: ${card.data.name}`,'ai');
+}
+
+function aiCastCard(card){
+  GAME.ai.hand=GAME.ai.hand.filter(c=>c.id!==card.id);
+  if(isCreature(card.data)) card.sickness=true;
+  tapAILandsForCost(card.data.cost);
+  if(isPermanent(card.data)){
+    applyEntersWithCounters(card, 'ai');
+    GAME.ai.battlefield.push(card);
+  }else{
+    // instant/sorcery → vai pro graveyard (efeito simplificado)
+    GAME.ai.graveyard.push(card);
+    // efeito básico: damage spells causam dano ao player se text bater
+    if(/deal[s]? \d+ damage to any target/i.test(card.data.text||'') || /deal[s]? \d+ damage/i.test(card.data.text||'')){
+      const m=card.data.text.match(/deal[s]? (\d+) damage/i);
+      if(m){
+        const dmg=parseInt(m[1]);
+        GAME.player.life-=dmg;
+        log(`IA causou ${dmg} de dano em você com ${card.data.name}`,'ai');
+        checkWinLoss();
+      }
+    }
+  }
+  log(`IA conjurou: ${card.data.name}`,'ai');
+}
+
+function tapAILandsForCost(cost){
+  // simplifica: tapa N lands não-tapped onde N=cmc
+  const need=parseCost(cost);
+  const totalNeed=need.W+need.U+need.B+need.R+need.G+need.C+need.generic;
+  let tapped=0;
+  for(const l of GAME.ai.lands){
+    if(tapped>=totalNeed)break;
+    if(!l.tapped){l.tapped=true;tapped++}
+  }
+}
+
+function aiCastCommander(){
+  const cmdr=GAME.ai.commandZone[0];if(!cmdr)return;
+  const tax=GAME.ai.cmdrCast*2;
+  tapAILandsForCost(cmdr.data.cost);
+  // tapa mais lands pra tax
+  let extra=tax;
+  for(const l of GAME.ai.lands){if(extra<=0)break;if(!l.tapped){l.tapped=true;extra--}}
+  GAME.ai.commandZone=[];
+  cmdr.sickness=true;
+  applyEntersWithCounters(cmdr, 'ai');
+  GAME.ai.battlefield.push(cmdr);
+  GAME.ai.cmdrCast++;
+  log(`► IA conjurou COMMANDER: ${cmdr.data.name} (tax: ${tax})`,'ai');
+}
+
+function aiCombat(){
+  // ataca com TODAS criaturas que podem (sem sickness, untapped)
+  const diff=GAME.difficulty;
+  const candidates=GAME.ai.battlefield.filter(c=>{
+    if(!isCreature(c.data))return false;
+    if(c.tapped)return false;
+    const hasHaste=/haste/i.test(c.data.text||'')||/haste/i.test((c.data.keywords||[]).join(' '));
+    if(c.sickness && !hasHaste)return false;
+    return true;
+  });
+  let attackers=[...candidates];
+  // easy: ataca com 50% só, e sem pensar
+  if(diff==='easy') attackers=attackers.filter(()=>Math.random()<0.5);
+  if(attackers.length===0){
+    log('IA não declara atacantes','ai');
+    return;
+  }
+  attackers.forEach(c=>c.tapped=true);
+  // declara bloqueadores do PLAYER (player escolhe? não, IA atacou — você precisa bloquear)
+  // → vai pra fase de bloqueio aguardando teu input. Mas como esse é o passo "combat" da fila IA,
+  // a gente para a fila aqui e abre fase de bloqueio interativa.
+  GAME.attackers=attackers.map(c=>c.id);
+  GAME.blockers={};
+  GAME.activePlayer='ai'; // ainda turno dela mas você bloqueia
+  setPhase('combat-declare-blockers');
+  log(`IA ataca com ${attackers.length} criatura(s): ${attackers.map(c=>c.data.name).join(', ')}`,'ai');
+  // injeta um passo de "resolve dmg" na fila ANTES de end-turn
+  GAME.aiQueue.unshift({type:'resolve-ai-combat'});
+  toast(t('ai_attacks'));
+}
+
+function aiDeclareBlockers(){
+  // Quando VOCÊ atacou, IA decide bloqueios
+  const diff=GAME.difficulty;
+  const myAttackers=GAME.attackers.map(id=>GAME.player.battlefield.find(c=>c.id===id));
+  const aiBlockers=GAME.ai.battlefield.filter(c=>isCreature(c.data) && !c.tapped);
+  // heurística: bloqueia atacante mais perigoso com criatura que sobreviva ou faça troca favorável
+  const sortedAttackers=[...myAttackers].sort((a,b)=>(b.data.power||0)-(a.data.power||0));
+  const used=new Set();
+  for(const att of sortedAttackers){
+    const attP=parseInt(att.data.power)||0;
+    const attT=parseInt(att.data.toughness)||1;
+    // procura bloqueador que mata o atacante e sobrevive (ou troca, se atacante for grande)
+    let best=null,bestScore=-999;
+    for(const blk of aiBlockers){
+      if(used.has(blk.id))continue;
+      const blkP=parseInt(blk.data.power)||0;
+      const blkT=parseInt(blk.data.toughness)||1;
+      let score=0;
+      if(blkP>=attT) score+=10; // mata
+      if(blkT>attP) score+=8; // sobrevive
+      if(blkT<=attP) score-=5; // morre
+      if(blkP<attT) score-=3; // não mata
+      // life total threat: se vida da IA <= attP, prioriza bloquear
+      if(GAME.ai.life<=attP) score+=15;
+      if(score>bestScore){bestScore=score;best=blk}
+    }
+    if(best && (bestScore>0 || (diff!=='easy' && GAME.ai.life<=10))){
+      GAME.blockers[att.id]=best.id;
+      used.add(best.id);
+    }
+  }
+  const blockCount=Object.keys(GAME.blockers).length;
+  if(blockCount>0){
+    log(`IA bloqueia ${blockCount} atacante(s)`,'ai');
+    for(const [aId,bId] of Object.entries(GAME.blockers)){
+      const att=GAME.player.battlefield.find(c=>c.id===aId);
+      const blk=GAME.ai.battlefield.find(c=>c.id===bId);
+      log(`  ${blk.data.name} bloqueia ${att.data.name}`,'ai');
+    }
+  }else{
+    log('IA não bloqueia','ai');
+  }
+}
+
+function resolveCombatDamage(){
+  // Quando TUS atacantes resolvem dano contra IA
+  for(const attId of GAME.attackers){
+    const att=GAME.player.battlefield.find(c=>c.id===attId);
+    if(!att)continue;
+    const attP=parseInt(att.data.power)||0;
+    const blkId=GAME.blockers[attId];
+    if(blkId){
+      const blk=GAME.ai.battlefield.find(c=>c.id===blkId);
+      const blkP=parseInt(blk.data.power)||0;
+      const blkT=parseInt(blk.data.toughness)||1;
+      const attT=parseInt(att.data.toughness)||1;
+      // troca dano
+      if(blkP>=attT) killCard(att,GAME.player);
+      if(attP>=blkT) killCard(blk,GAME.ai);
+      log(`Combate: ${att.data.name} (${attP}/${attT}) x ${blk.data.name} (${blkP}/${blkT})`,'system');
+    }else{
+      // dano direto à IA
+      GAME.ai.life-=attP;
+      // se é commander, conta cmdr dmg
+      if(att.data.name === DECKS[GAME.player.deckKey].commander){
+        GAME.ai.cmdrDmgFrom+=attP;
+      }
+      log(`${att.data.name} causa ${attP} de dano à IA`,'player');
+    }
+  }
+  checkWinLoss();
+}
+
+// IA atacando: resolve dano quando player termina de bloquear
+function executeAIAction_resolve(){
+  // chamado quando player clica "próximo" durante AI combat
+}
+
+// override: handle 'resolve-ai-combat' in executeAIAction
+const _origExecuteAIAction=executeAIAction;
+executeAIAction=function(act){
+  if(act.type==='resolve-ai-combat'){
+    // resolve dano dos atacantes da IA contra player
+    for(const attId of GAME.attackers){
+      const att=GAME.ai.battlefield.find(c=>c.id===attId);
+      if(!att)continue;
+      const attP=parseInt(att.data.power)||0;
+      const blkId=GAME.blockers[attId];
+      if(blkId){
+        const blk=GAME.player.battlefield.find(c=>c.id===blkId);
+        if(!blk){
+          GAME.player.life-=attP;
+          log(`${att.data.name} causou ${attP} (bloqueador inválido?)`,'ai');
+        }else{
+          const blkP=parseInt(blk.data.power)||0;
+          const blkT=parseInt(blk.data.toughness)||1;
+          const attT=parseInt(att.data.toughness)||1;
+          if(blkP>=attT) killCard(att,GAME.ai);
+          if(attP>=blkT) killCard(blk,GAME.player);
+          log(`Combate: ${att.data.name} (${attP}/${attT}) x ${blk.data.name} (${blkP}/${blkT})`,'system');
+        }
+      }else{
+        GAME.player.life-=attP;
+        if(att.data.name === DECKS[GAME.ai.deckKey].commander){
+          GAME.player.cmdrDmgFrom+=attP;
+        }
+        log(`${att.data.name} causa ${attP} de dano em você`,'ai');
+      }
+    }
+    GAME.attackers=[];GAME.blockers={};
+    checkWinLoss();
+    renderAll();
+    return;
+  }
+  return _origExecuteAIAction.call(this,act);
+};
+
+function killCard(card, owner){
+  owner.battlefield=owner.battlefield.filter(c=>c.id!==card.id);
+  const ownerKey=owner.who==='player'?GAME.player.deckKey:GAME.ai.deckKey;
+  if(card.data.name === DECKS[ownerKey].commander){
+    owner.commandZone.push(card);
+    log(t('cmdr_back',{name:card.data.name}),'system');
+  }else{
+    owner.graveyard.push(card);
+    log(t('to_graveyard',{name:card.data.name}),'system');
+  }
+}
+
+function drawCard(p){
+  if(p.library.length===0){
+    log(t('deck_out')+(p.who==='player'?(GAME.lang==='pt'?' — Você perdeu':' — You lost'):(GAME.lang==='pt'?' — IA perdeu':' — AI lost')),'system');
+    endGame(p.who==='player'?'ai':'player', t('deck_out'));
+    return;
+  }
+  const c=p.library.shift();
+  p.hand.push(c);
+}
+
+function checkWinLoss(){
+  if(GAME.player.life<=0){endGame('ai',t('you_died_life'));return}
+  if(GAME.ai.life<=0){endGame('player',t('ai_died_life'));return}
+  if(GAME.player.cmdrDmgFrom>=21){endGame('ai',t('cmdr_dmg_you'));return}
+  if(GAME.ai.cmdrDmgFrom>=21){endGame('player',t('cmdr_dmg_ai'));return}
+}
+
+function endGame(winner, reason){
+  const msg=winner==='player'?t('victory'):t('defeat');
+  confirmModal(msg, `<strong>${reason}</strong><br><br>${GAME.lang==='pt'?'Quer jogar de novo?':'Play again?'}`, [
+    {label:t('new_game'),cls:'amber',fn:()=>location.reload()},
+    {label:t('close'),cls:'',fn:()=>{}}
+  ]);
+}
+
+/* === MANUAL EFFECT PANEL === */
+function openManualEffectPanel(card){
+  const isPt = GAME.lang==='pt';
+  confirmModal(
+    (isPt?'EFEITO: ':'EFFECT: ')+card.data.name,
+    isPt?
+      'Como aplicar? Use os botões abaixo. Para efeitos mais complexos, ajuste manualmente as vidas/cartas.':
+      'How to apply? Use buttons below. For complex effects adjust life/cards manually.',
+    [
+      {label:isPt?'+1 carta pra mim':'+1 card for me',cls:'',fn:()=>{drawCard(GAME.player);log(t('you_drew'),'player');renderAll()}},
+      {label:isPt?'-3 vida IA':'-3 life AI',cls:'',fn:()=>{GAME.ai.life-=3;log(isPt?'IA: -3 de vida':'AI: -3 life','player');checkWinLoss();renderAll()}},
+      {label:isPt?'+3 vida pra mim':'+3 life for me',cls:'',fn:()=>{GAME.player.life+=3;log(isPt?'Você: +3 de vida':'You: +3 life','player');renderAll()}},
+      {label:isPt?'OK / Já apliquei':'OK / Already applied',cls:'amber',fn:()=>{}},
+    ]
+  );
+}
+
+/* === MODAL === */
+function confirmModal(title, html, actions){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').innerHTML=html;
+  const ac=document.getElementById('modal-actions');
+  ac.innerHTML='';
+  actions.forEach(a=>{
+    const b=document.createElement('button');
+    b.textContent=a.label;
+    if(a.cls)b.className=a.cls;
+    b.addEventListener('click',()=>{
+      document.getElementById('modal').classList.remove('visible');
+      a.fn();
+    });
+    ac.appendChild(b);
+  });
+  document.getElementById('modal').classList.add('visible');
+}
+
+/* === TOAST === */
+let toastTimer=null;
+function toast(msg){
+  let t=document.getElementById('toast');
+  if(!t){
+    t=document.createElement('div');t.id='toast';
+    t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--bg-panel);border:2px solid var(--amber);color:var(--amber);padding:8px 16px;font-size:15px;z-index:2000;box-shadow:0 0 20px rgba(255,176,0,.4);max-width:80vw;text-align:center';
+    document.body.appendChild(t);
+  }
+  t.textContent=msg;
+  t.style.display='block';
+  if(toastTimer)clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.style.display='none',3200);
+}
+
+/* === LOG === */
+function log(msg, cls=''){
+  GAME.log.push({msg,cls});
+  const el=document.getElementById('turn-log');
+  if(!el)return;
+  const d=document.createElement('div');
+  d.textContent=msg;
+  if(cls)d.className=cls;
+  el.appendChild(d);
+  el.scrollTop=el.scrollHeight;
+}
+</script>
+</body>
+</html>
